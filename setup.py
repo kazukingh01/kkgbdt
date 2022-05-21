@@ -25,6 +25,7 @@ setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
+        "xgboost==1.6.1",
     ],
     python_requires='>=3.8'
 )

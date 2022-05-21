@@ -1,12 +1,12 @@
 import time
 from typing import List, Union
-from xgboost.callback import TrainingCallback, EarlyStopping
+from xgboost.callback import TrainingCallback
 from kkgbdt.util.logger import set_logger, MyLogger
 logger = set_logger(__name__)
 
 
 __all__ = [
-    "callback_model_save",
+    "PrintEvalation",
     "callback_stop_training",
     "callback_best_iter",
     "callback_lr_schedule",
@@ -24,12 +24,34 @@ class PrintEvalation(TrainingCallback):
         return False
 
 
-def callback_model_save(save_interval: int):
-    def _callback(env):
-        if (env.iteration % save_interval) == 0:
-            env.model.save_model(f'model_{env.iteration}.txt')
-    _callback.order = 110
-    return _callback
+class TrainStopping(TrainingCallback):
+    def __init__(self, metric_name: str, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None):
+        super().__init__()
+        assert isinstance(metric_name, str)
+        if stopping_val is not None:
+            assert isinstance(stopping_val, float)
+            assert isinstance(stopping_rounds, int) and stopping_rounds > 0
+            assert isinstance(stopping_is_over, bool)
+        if isinstance(stopping_train_time, int): stopping_train_time = float(stopping_train_time)
+        if stopping_train_time is not None: assert isinstance(stopping_train_time, float) and stopping_train_time > 0
+        self.metric_name         = metric_name
+        self.stopping_val        = stopping_val
+        self.stopping_rounds     = stopping_rounds
+        self.stopping_is_over    = stopping_is_over
+        self.stopping_train_time = stopping_train_time
+        self.dict_train          = {"time": 9999999999}
+    def after_iteration(self, model, epoch: int, evals_log: TrainingCallback.EvalsLog) -> bool:
+        if (self.stopping_train_time is not None) and ((time.time() - self.dict_train["time"]) > self.stopping_train_time):
+            logger.info("Stopping training because time is over.")
+            return True
+        if self.stopping_val is not None:
+            boolwk = (evals_log["train"][self.metric_name][-1] > self.stopping_val) if self.stopping_is_over else (evals_log["train"][self.metric_name][-1] < self.stopping_val)
+            if (epoch > self.stopping_rounds) and boolwk:
+                logger.info(f"Stopping training because loss value is {'over' if self.stopping_is_over else 'less'} than {self.stopping_val}.")
+                return True
+        self.dict_train["time"] = time.time()
+        return False
+
 
 def callback_stop_training(dict_train: dict, stopping_val: float, stopping_rounds: int, stopping_type: str, stopping_train_time: int, logger: MyLogger):
     """

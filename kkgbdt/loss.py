@@ -7,10 +7,10 @@ from scipy.misc import derivative
 
 
 __all__ = [
+    "Loss",
     "LGBCustomObjective",
     "LGBCustomEval",
     "calc_grad_hess",
-    "Loss",
     "BinaryCrossEntropyLoss",
     "CrossEntropyLoss",
     "CrossEntropyLossArgmax",
@@ -66,25 +66,28 @@ class Loss:
 
 
 class LGBCustomObjective:
-    def __init__(self, func_loss: Loss):
+    def __init__(self, func_loss: Loss, mode: str="xgb"):
         assert isinstance(func_loss, Loss)
-        self.func_loss = func_loss
-    def __call__(self, y_pred: np.ndarray, data):
-        """
-        customized objective base function
-        Params::
-            y_pred:
-                Predicted value. In the case of multi class, the length is n_sample * n_class
-                Value is ... array([0 data 0 label prediction, ..., N data 0 label prediction, 0 data 1 label prediction, ..., ])
-            data:
-                train_set
-            func_loss:
-                Take y_pred and y_true as input and return with the same shape as y_pred
-                grad, hess = func_loss(y_pred, y_true)
-        """
-        y_pred, y_true = self.convert_lgb_input(y_pred, data)
-        grad, hess = self.func_loss(y_pred, y_true)
-        return grad.T.reshape(-1), hess.T.reshape(-1)
+        assert isinstance(mode, str) and mode in ["xgb", "lgb"]
+        self.func_loss   = func_loss
+        if   mode == "xgb":
+            self.conv_input  = self.convert_xgb_input
+            self.conv_output = self.convert_xgb_output
+        elif mode == "lgb":
+            self.conv_input  = self.convert_lgb_input
+            self.conv_output = self.convert_lgb_output
+    def __call__(self, y_pred: np.ndarray, data: Dataset):
+        y_pred, y_true = self.conv_input(y_pred, data)
+        grad, hess = self.func_loss.gradhess(y_pred, y_true)
+        grad, hess = self.conv_output(grad, hess)
+        return grad, hess
+    @classmethod
+    def convert_xgb_input(cls, y_pred: np.ndarray, data: Dataset):
+        if hasattr(data, "custom_label"):
+            y_true = data.get_custom_label(data.get_label())
+        else:
+            y_true = data.get_label()
+        return y_pred, y_true
     @classmethod
     def convert_lgb_input(cls, y_pred: np.ndarray, data: Dataset):
         """
@@ -93,47 +96,41 @@ class LGBCustomObjective:
                 Predicted value. In the case of multi class, the length is n_sample * n_class
                 Value is ... array([0 data 0 label prediction, ..., N data 0 label prediction, 0 data 1 label prediction, ..., ])
             data:
-                train_set
-        """    
-        if isinstance(data, Dataset):
-            y_true = data.label
-            if hasattr(data, "ndf_label"):
-                y_true = data.get_culstom_label(y_true.astype(int))
+                Dataset
+        """
+        if hasattr(data, "custom_label"):
+            y_true = data.get_custom_label(data.label)
         else:
-            # If "data" is not lgb.dataset, the input will be reversed, so be careful.
-            # "y_pred" -> label, "data" -> predicted value
-            y_true = y_pred.copy()
-            y_pred = data
-        if y_pred.shape[0] != y_true.shape[0]:
-            # multi class case
-            y_pred = y_pred.reshape(-1 , y_true.shape[0]).T
+            y_true = data.label
         return y_pred, y_true
+    @classmethod
+    def convert_xgb_output(cls, grad: np.ndarray, hess: np.ndarray):
+        return grad.reshape(-1), hess.reshape(-1)
+    @classmethod
+    def convert_lgb_output(cls, grad: np.ndarray, hess: np.ndarray):
+        return grad.T.reshape(-1), hess.T.reshape(-1)
 
 
 class LGBCustomEval(LGBCustomObjective):
-    def __init__(self, func_loss: Loss, name: str=None, is_higher_better: bool=None):
-        assert isinstance(func_loss, Loss)
+    def __init__(self, func_loss: Loss, mode: str="xgb", name: str=None, is_higher_better: bool=None):
         if name             is None: name             = func_loss.name
         if is_higher_better is None: is_higher_better = func_loss.is_higher_better
         assert isinstance(name, str)
         assert isinstance(is_higher_better, bool)
-        super().__init__(func_loss)
+        super().__init__(func_loss, mode=mode)
         self.name = name
         self.is_higher_better = is_higher_better
+        if   mode == "xgb":
+            self.conv_metric = self.convert_xgb_metric
+        elif mode == "lgb":
+            self.conv_metric = self.convert_lgb_metric
     def __call__(self, y_pred: np.ndarray, data: Dataset):
-        """
-        Params::
-            y_pred:
-                Predicted value. In the case of multi class, the length is n_sample * n_class
-                Value is ... array([0 data 0 label prediction, ..., N data 0 label prediction, 0 data 1 label prediction, ..., ])
-            data:
-                train_set
-            func_loss:
-                Take y_pred and y_true as input and return with the same shape as y_pred
-                value = func_loss(y_pred, y_true)
-        """
-        y_pred, y_true = self.convert_lgb_input(y_pred, data)
-        value = self.func(y_pred, y_true)
+        y_pred, y_true = self.conv_input(y_pred, data)
+        value = self.func_loss(y_pred, y_true)
+        return self.conv_metric(value)
+    def convert_xgb_metric(self, value):
+        return self.name, value
+    def convert_lgb_metric(self, value):
         return self.name, value, self.is_higher_better
 
 
