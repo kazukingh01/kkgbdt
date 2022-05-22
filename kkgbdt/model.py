@@ -125,10 +125,13 @@ def train_xgb(
     enable_categorical = False
     if categorical_features is not None:
         assert check_type_list(categorical_features, int)
-        _categorical_features = np.array(["q"] * x_train.shape[-1]) # "q" is numerical.
-        _categorical_features[categorical_features] = "c"
-        categorical_features = _categorical_features
-        enable_categorical   = True
+        if len(categorical_features) > 0:
+            _categorical_features = np.array(["q"] * x_train.shape[-1]) # "q" is numerical.
+            _categorical_features[categorical_features] = "c"
+            categorical_features = _categorical_features
+            enable_categorical   = True
+        else:
+            categorical_features = None
     # set dataset
     dataset_train = Dataset(x_train, label=y_train, weight=y_train, feature_types=categorical_features, enable_categorical=enable_categorical)
     dataset_valid = [(dataset_train, "train")] + [
