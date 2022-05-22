@@ -11,7 +11,7 @@ __all__ = [
 
 
 def parameter_tune(
-    trial, num_class: int=None, is_gpu: bool=False, eval_string: str=None,
+    trial, num_class: int=None, n_jobs: int=1, is_gpu: bool=False, eval_string: str=None,
     x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: Union[str, Loss]=None, num_boost_round: int=None,
     x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None,
     loss_func_eval: Union[str, Loss]=None, early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
@@ -67,7 +67,7 @@ def parameter_tune(
     }
     params = copy.deepcopy(params_const)
     params.update(params_search)
-    model = KkGBDT(num_class, **params)
+    model = KkGBDT(num_class, n_jobs=n_jobs, **params)
     model.fit(
         x_train, y_train, loss_func=loss_func, num_boost_round=num_boost_round, 
         x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,

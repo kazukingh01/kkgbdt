@@ -19,7 +19,7 @@ __all__ = [
 
 
 class KkGBDT:
-    def __init__(self, num_class: int, mode: str="xgb", is_softmax: bool=False, **kwargs):
+    def __init__(self, num_class: int, mode: str="xgb", is_softmax: bool=False, n_jobs: int=1, **kwargs):
         logger.info("START")
         assert isinstance(num_class, int) and num_class > 0
         assert isinstance(mode, str) and mode in ["xgb", "lgb"]
@@ -28,6 +28,7 @@ class KkGBDT:
         self.mode       = mode
         self.params = {}
         self.params["num_class"] = num_class
+        self.params["nthread"]   = n_jobs
         self.params.update(copy.deepcopy(kwargs))
         self.evals_result = {}
         self.classes_     = np.arange(num_class, dtype=int)
