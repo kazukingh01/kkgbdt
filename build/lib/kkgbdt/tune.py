@@ -46,7 +46,7 @@ def parameter_tune(
     params_const = {
         "eta"      : 0.03,
         "max_depth": 0,
-        "sampling_method": "gradient_based" if is_gpu else "uniform",
+        "sampling_method": "uniform",
         "colsample_bylevel": 1,
         "colsample_bynode": 1,
         "tree_method": "gpu_hist" if is_gpu else "hist",
@@ -54,7 +54,6 @@ def parameter_tune(
         "max_leaves": 100,
         "max_bin": 256,
         "single_precision_histogram": True,
-        "feature_selector": "cyclic",
         "seed": 0,
     }
     params_search={
