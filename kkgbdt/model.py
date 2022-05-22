@@ -128,7 +128,7 @@ def train_xgb(
         if len(categorical_features) > 0:
             _categorical_features = np.array(["q"] * x_train.shape[-1]) # "q" is numerical.
             _categorical_features[categorical_features] = "c"
-            categorical_features = _categorical_features
+            categorical_features = _categorical_features.tolist()
             enable_categorical   = True
         else:
             categorical_features = None
