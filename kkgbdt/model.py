@@ -1,11 +1,13 @@
 import copy
 import numpy as np
 import xgboost as xgb
+import lightgbm as lgb
 from xgboost.callback import EarlyStopping
+from lightgbm.callback import record_evaluation
 from typing import Union, List
 from kkgbdt.loss import Loss, LGBCustomObjective, LGBCustomEval
-from kkgbdt.dataset import Dataset
-from kkgbdt.callbacks import PrintEvalation, TrainStopping
+from kkgbdt.dataset import DatasetXGB, DatasetLGB
+from kkgbdt.callbacks import PrintEvalation, TrainStopping, print_evaluation, callback_stop_training, callback_best_iter
 from kkgbdt.util.numpy import softmax
 from kkgbdt.util.com import check_type, check_type_list
 from kkgbdt.util.logger import set_logger
@@ -24,15 +26,24 @@ class KkGBDT:
         assert isinstance(num_class, int) and num_class > 0
         assert isinstance(mode, str) and mode in ["xgb", "lgb"]
         assert isinstance(is_softmax, bool)
-        self.booster    = None
-        self.mode       = mode
-        self.params = {}
+        self.booster = None
+        self.mode    = mode
+        self.params  = {}
         self.params["num_class"] = num_class
-        self.params["nthread"]   = n_jobs
+        if mode == "xgb":
+            self.params["nthread"]     = n_jobs
+        else:
+            self.params["num_threads"] = n_jobs
         self.params.update(copy.deepcopy(kwargs))
         self.evals_result = {}
         self.classes_     = np.arange(num_class, dtype=int)
         self.is_softmax   = is_softmax
+        if mode == "xgb":
+            self.train_func   = train_xgb
+            self.predict_func = self.predict_xgb
+        else:
+            self.train_func   = train_lgb
+            self.predict_func = self.predict_lgb
         logger.info(f"params: {self.params}")
         logger.info("END")
     def fit(
@@ -45,7 +56,7 @@ class KkGBDT:
         logger.info("START")
         assert loss_func is not None
         assert num_boost_round is not None
-        self.booster = train_xgb(
+        self.booster = self.train_func(
             copy.deepcopy(self.params), num_boost_round, x_train, y_train, loss_func,
             evals_result=self.evals_result, x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
             early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
@@ -56,10 +67,23 @@ class KkGBDT:
         self.set_parameter_after_training()
         logger.info("END")
     def set_parameter_after_training(self):
-        self.feature_importances_ = self.booster.get_fscore()
+        if self.mode == "xgb":
+            self.feature_importances_ = self.booster.get_fscore()
+        else:
+            self.feature_importances_ = self.booster.feature_importance()
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
+        return self.predict_func(input, *args, is_softmax=is_softmax, **kwargs)
+    def predict_xgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
         logger.info("START")
-        output = self.booster.predict(Dataset(input), *args, output_margin=True, **kwargs)
+        output = self.booster.predict(DatasetXGB(input), *args, output_margin=True, **kwargs)
+        if is_softmax is None: is_softmax = self.is_softmax
+        if is_softmax:
+            output = softmax(output)
+        logger.info("END")
+        return output
+    def predict_lgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
+        logger.info("START")
+        output = self.booster.predict(input, *args, **kwargs)
         if is_softmax is None: is_softmax = self.is_softmax
         if is_softmax:
             output = softmax(output)
@@ -134,9 +158,9 @@ def train_xgb(
         else:
             categorical_features = None
     # set dataset
-    dataset_train = Dataset(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
+    dataset_train = DatasetXGB(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
     dataset_valid = [(dataset_train, "train")] + [
-        (Dataset(_x_valid, label=_y_valid), f"valid_{i_valid}") for i_valid, (_x_valid, _y_valid) in enumerate(zip(x_valid, y_valid))
+        (DatasetXGB(_x_valid, label=_y_valid), f"valid_{i_valid}") for i_valid, (_x_valid, _y_valid) in enumerate(zip(x_valid, y_valid))
     ]
     # loss setting
     _loss_func, _loss_func_eval = None, None
@@ -187,3 +211,115 @@ def train_xgb(
     logger.info("END")
     return model
 
+
+def train_lgb(
+    # fitting parameter
+    params: dict, num_boost_round: int,
+    # training data & loss
+    x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss], evals_result: dict={}, 
+    # validation data & loss
+    x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None, loss_func_eval: Union[str, Loss]=None,
+    # early stopping parameter
+    early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
+    stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
+    # option
+    sample_weight: Union[str, np.ndarray]=None, categorical_features: List[int]=None
+):
+    """
+    Params::
+        loss_func: custom loss or string
+            string:
+                see: https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective
+                binary, multiclass, regression, ...
+        loss_func_eval:
+            custom loss or string.
+            string:
+                see: https://lightgbm.readthedocs.io/en/latest/Parameters.html#metric
+                rmse, auc, multi_logloss, ...
+    """
+    logger.info("START")
+    assert isinstance(params, dict)
+    assert isinstance(x_train, np.ndarray) and len(x_train.shape) == 2
+    assert isinstance(y_train, np.ndarray) and len(y_train.shape) in [1, 2]
+    assert isinstance(loss_func, str) or isinstance(loss_func, Loss)
+    assert isinstance(num_boost_round, int) and num_boost_round > 0
+    assert isinstance(evals_result, dict)
+    if x_valid is None: x_valid = []
+    if y_valid is None: y_valid = []
+    if not isinstance(x_valid, list): x_valid = [x_valid, ]
+    if not isinstance(y_valid, list): y_valid = [y_valid, ]
+    assert check_type_list(x_valid, np.ndarray)
+    assert check_type_list(y_valid, np.ndarray)
+    if loss_func_eval is not None:
+        if not isinstance(loss_func_eval, list): loss_func_eval = [loss_func_eval, ]
+        assert check_type_list(loss_func_eval, [str, Loss])
+    # check params
+    if params.get("objective") is not None: logger.raise_error(f"please set 'objective' parameter to 'loss_func'.")
+    if params.get("metric")    is not None: logger.raise_error(f"please set 'metric'    parameter to 'loss_func_eval'.")
+    params["num_iterations"] = num_boost_round
+    params["verbosity"]      = -1
+    # dataset option
+    if sample_weight is not None:
+        assert isinstance(sample_weight, str) or isinstance(sample_weight, np.ndarray)
+        if isinstance(sample_weight, str):
+            assert sample_weight in ["balanced"]
+            assert len(y_train.shape) == 1 and y_train.dtype in [int, np.int16, np.int32, np.int64]
+            assert np.unique(y_train).shape == np.bincount(y_train).shape
+            sample_weight = np.bincount(y_train)
+            sample_weight = sample_weight.min() / sample_weight
+            sample_weight = sample_weight[y_train]
+        else:
+            assert len(sample_weight.shape) == 1 and y_train.shape[0] == sample_weight.shape[0]
+    if categorical_features is not None:
+        assert check_type_list(categorical_features, int)
+    else:
+        categorical_features = "auto"
+    # set dataset
+    dataset_train = DatasetLGB(x_train, label=y_train, weight=sample_weight, categorical_feature=categorical_features)
+    dataset_valid = [dataset_train] + [DatasetLGB(_x_valid, label=_y_valid) for _x_valid, _y_valid in zip(x_valid, y_valid)]
+    # loss setting
+    _loss_func, _loss_func_eval = None, None
+    params["metric"] = []
+    if isinstance(loss_func, str):
+        params["objective"] = loss_func
+    else:
+        _loss_func = LGBCustomObjective(loss_func, mode="lgb")
+    if loss_func_eval is not None:
+        for func_eval in loss_func_eval:
+            if isinstance(func_eval, str):
+                params["metric"].append(func_eval)
+            else:
+                if _loss_func_eval is None: _loss_func_eval = []
+                _loss_func_eval.append(LGBCustomEval(func_eval, mode="lgb", is_higher_better=func_eval.is_higher_better))
+    # callbacks
+    callbacks = [
+        record_evaluation(evals_result),
+        print_evaluation(),
+    ]
+    ## early stopping
+    dict_train, dict_eval_best = {}, {}
+    if early_stopping_rounds is not None:
+        assert isinstance(early_stopping_rounds, int) and early_stopping_rounds > 0
+        assert check_type(early_stopping_name, [int, str])
+        if isinstance(early_stopping_name, int):
+            assert (early_stopping_name >= 0) and (loss_func_eval is not None) 
+            metric_name = loss_func_eval[early_stopping_name]
+            if isinstance(metric_name, Loss): metric_name = metric_name.name
+        else:
+            metric_name = early_stopping_name
+        callbacks.append(callback_best_iter(dict_eval_best, early_stopping_rounds, metric_name))
+    ## train stopping
+    if stopping_name is not None:
+        assert stopping_val is not None or stopping_train_time is not None
+        callbacks.append(
+            callback_stop_training(dict_train, stopping_val, stopping_rounds, stopping_is_over, stopping_train_time)
+        )
+    # train
+    model = lgb.train(
+        params, dataset_train, 
+        valid_sets=dataset_valid, valid_names=["train"]+["valid"+str(i) for i in range(len(dataset_valid)-1)],
+        fobj=_loss_func, feval=_loss_func_eval, evals_result=evals_result,
+        callbacks=callbacks
+    )
+    logger.info("END")
+    return model

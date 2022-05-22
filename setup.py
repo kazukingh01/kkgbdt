@@ -26,6 +26,7 @@ setup(
     ],
     install_requires=[
         "xgboost==1.6.1",
+        "lightgbm==3.3.2",
     ],
     python_requires='>=3.8'
 )

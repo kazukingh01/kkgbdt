@@ -1,15 +1,17 @@
 import time
 from typing import List, Union
 from xgboost.callback import TrainingCallback
+from lightgbm.callback import EarlyStopException, _format_eval_result
+from kkgbdt.util.com import check_type
 from kkgbdt.util.logger import set_logger, MyLogger
 logger = set_logger(__name__)
 
 
 __all__ = [
     "PrintEvalation",
+    "TrainStopping",
     "callback_stop_training",
     "callback_best_iter",
-    "callback_lr_schedule",
     "print_evaluation"
 ]
 
@@ -53,31 +55,31 @@ class TrainStopping(TrainingCallback):
         return False
 
 
-def callback_stop_training(dict_train: dict, stopping_val: float, stopping_rounds: int, stopping_type: str, stopping_train_time: int, logger: MyLogger):
+def callback_stop_training(dict_train: dict, stopping_val: float, stopping_rounds: int, stopping_is_over: bool, stopping_train_time: float):
     """
     If training loss does not reach the threshold, it will be terminated first.
     """
-    assert isinstance(stopping_type, str) and stopping_type in ["over", "less"]
     def _init(env):
         dict_train["time"] = time.time()
     def _callback(env):
         if not dict_train: _init(env)
         _, _, result, _ = env.evaluation_result_list[0]
-        if isinstance(stopping_train_time, int) and ((time.time() - dict_train["time"]) > stopping_train_time):
+        if check_type(stopping_train_time, [int, float]) and ((time.time() - dict_train["time"]) > stopping_train_time):
             logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
             raise EarlyStopException(env.iteration, env.evaluation_result_list)
         if isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds:
-            if   stopping_type == "over" and result > stopping_val:
+            if stopping_is_over and result > stopping_val:
                 logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
                 raise EarlyStopException(env.iteration, env.evaluation_result_list)
-            elif stopping_type == "less" and result < stopping_val:
+            elif stopping_is_over == False and result < stopping_val:
                 logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
                 raise EarlyStopException(env.iteration, env.evaluation_result_list)
         dict_train["time"] = time.time()
     _callback.order = 150
     return _callback
 
-def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, int], logger: MyLogger):
+
+def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, int]):
     """
     Determine best iteration for valid0
     """
@@ -109,18 +111,8 @@ def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, i
     _callback.order = 200
     return _callback
 
-def callback_lr_schedule(lr_steps: List[int], lr_decay: float=0.2):
-    def _callback(env):
-        if int(env.iteration - env.begin_iteration) in lr_steps:
-            lr = env.params.get("learning_rate", None)
-            dictwk = {"learning_rate": lr * lr_decay}
-            env.model.reset_parameter(dictwk)
-            env.params.update(dictwk)
-    _callback.before_iteration = True
-    _callback.order = 100
-    return _callback
 
-def print_evaluation(logger: MyLogger, period=1, show_stdv=True):
+def print_evaluation(period=1, show_stdv=True):
     def _callback(env):
         if period > 0 and env.evaluation_result_list and (env.iteration + 1) % period == 0:
             result = '\t'.join([_format_eval_result(x, show_stdv) for x in env.evaluation_result_list])

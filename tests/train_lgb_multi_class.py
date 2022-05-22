@@ -9,18 +9,18 @@ if __name__ == "__main__":
     train_y = np.random.randint(0, n_class, n_data)
     valid_x = np.random.rand(n_data, 100)
     valid_y = np.random.randint(0, n_class, n_data)
-    model   = KkGBDT(n_class, mode="xgb", subsample=0.5)
+    model   = KkGBDT(n_class, mode="lgb", subsample=0.5)
     # public loss
     model.fit(
-        train_x, train_y, loss_func="multi:softmax", num_boost_round=10,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["mlogloss", "auc"],
+        train_x, train_y, loss_func="multiclass", num_boost_round=10,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass"],
         early_stopping_rounds=None, early_stopping_name=0
     )
     # print(model.predict(valid_x, is_softmax=True))
     # custom loss CategoryCE
     model.fit(
         train_x, train_y, loss_func=CategoricalCrossEntropyLoss(n_class), num_boost_round=10,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["mlogloss", "auc", CategoricalCrossEntropyLoss(n_class)],
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass", CategoricalCrossEntropyLoss(n_class)],
         early_stopping_rounds=None, early_stopping_name=0
     )
     # print(model.predict(valid_x, is_softmax=True))

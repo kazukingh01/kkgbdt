@@ -102,6 +102,9 @@ class LGBCustomObjective:
             y_true = data.get_custom_label(data.label)
         else:
             y_true = data.label
+        if y_pred.shape[0] != y_true.shape[0]:
+            # multi class case
+            y_pred = y_pred.reshape(-1 , y_true.shape[0]).T
         return y_pred, y_true
     @classmethod
     def convert_xgb_output(cls, grad: np.ndarray, hess: np.ndarray):
