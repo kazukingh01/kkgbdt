@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='kkgbdt',
-    version='1.0.0',
+    version='1.0.1',
     description='my object detection library.',
     long_description=long_description,
     long_description_content_type="text/markdown",
