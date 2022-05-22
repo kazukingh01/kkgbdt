@@ -45,14 +45,14 @@ def parameter_tune(
     assert isinstance(num_boost_round, int)
     params_const = {
         "eta"      : 0.03,
-        "max_depth": 0,
+        "max_depth": 7,
         "sampling_method": "uniform",
         "colsample_bylevel": 1,
         "colsample_bynode": 1,
         "tree_method": "gpu_hist" if is_gpu else "hist",
         "grow_policy": "depthwise",
         "max_leaves": 100,
-        "max_bin": 256,
+        "max_bin": 128,
         "single_precision_histogram": True,
         "seed": 0,
     }

@@ -4,12 +4,12 @@ from kkgbdt.loss import CategoricalCrossEntropyLoss, CrossEntropyLoss
 
 
 if __name__ == "__main__":
-    n_class, n_data = 5, 100
-    train_x = np.random.rand(n_data, 10)
+    n_class, n_data = 5, 1000
+    train_x = np.random.rand(n_data, 100)
     train_y = np.random.randint(0, n_class, n_data)
-    valid_x = np.random.rand(n_data, 10)
+    valid_x = np.random.rand(n_data, 100)
     valid_y = np.random.randint(0, n_class, n_data)
-    model   = KkGBDT(n_class)
+    model   = KkGBDT(n_class, subsample=0.5)
     # public loss
     model.fit(
         train_x, train_y, loss_func="multi:softmax", num_boost_round=10,

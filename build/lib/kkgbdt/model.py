@@ -134,7 +134,7 @@ def train_xgb(
         else:
             categorical_features = None
     # set dataset
-    dataset_train = Dataset(x_train, label=y_train, weight=y_train, feature_types=categorical_features, enable_categorical=enable_categorical)
+    dataset_train = Dataset(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
     dataset_valid = [(dataset_train, "train")] + [
         (Dataset(_x_valid, label=_y_valid), f"valid_{i_valid}") for i_valid, (_x_valid, _y_valid) in enumerate(zip(x_valid, y_valid))
     ]
