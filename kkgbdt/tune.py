@@ -3,20 +3,42 @@ from typing import List, Union
 import numpy as np
 from kkgbdt.model import KkGBDT
 from kkgbdt.loss import Loss
+from kkgbdt.util.logger import set_logger
+logger = set_logger(__name__)
 
 
 __all__ = [
-    "parameter_tune"
+    "tune_parameter"
 ]
 
 
-def parameter_tune(
-    trial, num_class: int=None, n_jobs: int=1, is_gpu: bool=False, eval_string: str=None,
-    x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: Union[str, Loss]=None, num_boost_round: int=None,
+def tune_parameter(
+    trial, mode: str="xgb", num_class: int=None, n_jobs: int=1, eval_string: str=None,
+    x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: Union[str, Loss]=None, num_iterations: int=None,
     x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None,
     loss_func_eval: Union[str, Loss]=None, early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
     stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
     sample_weight: Union[str, np.ndarray]=None, categorical_features: List[int]=None,
+    params_const = {
+        "learning_rate"    : 0.03,
+        "num_leaves"       : 100,
+        "is_gpu"           : False,
+        "random_seed"      : 0,
+        "max_depth"        : 0,
+        "min_child_samples": 20,
+        "subsample"        : 1,
+        "colsample_bylevel": 1,
+        "colsample_bynode" : 1,
+        "max_bin"          : 256,
+        "min_data_in_bin"  : 5,
+    },
+    params_search='''{
+        "min_child_weight" : trial.suggest_loguniform("min_child_weight", 1e-4, 1e3),
+        "colsample_bytree" : trial.suggest_loguniform("colsample_bytree", 0.001, 0.5),
+        "reg_alpha"        : trial.suggest_loguniform("alpha",  1e-4, 1e3),
+        "reg_lambda"       : trial.suggest_loguniform("lambda", 1e-4, 1e3),
+        "min_split_gain"   : trial.suggest_loguniform("gamma", 1e-10, 1.0),
+    }'''
 ):
     """
     Usage::
@@ -32,48 +54,31 @@ def parameter_tune(
         >>> from kkgbdt.tune import parameter_tune
         >>> func = partial(parameter_tune,
                 num_class=num_class, eval_string='model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration]',
-                x_train=x_train, y_train=y_train, loss_func="multi:softmax", num_boost_round=10,
+                x_train=x_train, y_train=y_train, loss_func="multi:softmax", num_iterations=10,
                 x_valid=x_valid, y_valid=y_valid, loss_func_eval="mlogloss", 
             )
         >>> study.optimize(func, n_trials=100)
     """
-    assert isinstance(num_class, int)
+    logger.info("START")
     assert isinstance(eval_string, str)
     assert isinstance(x_train, np.ndarray)
     assert isinstance(y_train, np.ndarray)
     assert loss_func is not None
-    assert isinstance(num_boost_round, int)
-    params_const = {
-        "eta"      : 0.03,
-        "max_depth": 7,
-        "sampling_method": "uniform",
-        "colsample_bylevel": 1,
-        "colsample_bynode": 1,
-        "tree_method": "gpu_hist" if is_gpu else "hist",
-        "grow_policy": "depthwise",
-        "max_leaves": 100,
-        "max_bin": 128,
-        "single_precision_histogram": True,
-        "seed": 0,
-    }
-    params_search={
-        "gamma"            : trial.suggest_uniform('gamma', 0, 1.0),
-        "min_child_weight" : trial.suggest_loguniform('min_child_weight', 1e-4, 1e3),
-        "subsample"        : trial.suggest_uniform('subsample', 0.5 , 0.99),
-        "colsample_bytree" : trial.suggest_loguniform('colsample_bytree', 0.001, 1.0),
-        "alpha"            : trial.suggest_loguniform('alpha',  1e-4, 1e3),
-        "lambda"           : trial.suggest_loguniform('lambda', 1e-4, 1e3),
-    }
+    assert isinstance(num_iterations, int)
+    params_search = eval(params_search, {}, {"trial": trial})
     params = copy.deepcopy(params_const)
     params.update(params_search)
-    model = KkGBDT(num_class, n_jobs=n_jobs, **params)
+    model = KkGBDT(num_class, mode=mode, n_jobs=n_jobs, **params)
     model.fit(
-        x_train, y_train, loss_func=loss_func, num_boost_round=num_boost_round, 
+        x_train, y_train, loss_func=loss_func, num_iterations=num_iterations, 
         x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
         early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
         stopping_name=stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, 
         stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time,
         sample_weight=sample_weight, categorical_features=categorical_features,
     )
+    logger.info("END")
     return eval(eval_string, {}, {"model": model, "np": np})
     
+
+

@@ -12,25 +12,26 @@ if __name__ == "__main__":
     model   = KkGBDT(n_class, mode="lgb", subsample=0.5)
     # public loss
     model.fit(
-        train_x, train_y, loss_func="multiclass", num_boost_round=10,
+        train_x, train_y, loss_func="multiclass", num_iterations=10,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass"],
         early_stopping_rounds=None, early_stopping_name=0
     )
-    # print(model.predict(valid_x, is_softmax=True))
+    raise
+    print(model.predict(valid_x, is_softmax=False))
     # custom loss CategoryCE
     model.fit(
-        train_x, train_y, loss_func=CategoricalCrossEntropyLoss(n_class), num_boost_round=10,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass", CategoricalCrossEntropyLoss(n_class)],
-        early_stopping_rounds=None, early_stopping_name=0
+        train_x, train_y, loss_func=CategoricalCrossEntropyLoss(n_class), num_iterations=10,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=[CategoricalCrossEntropyLoss(n_class), "multiclass"],
+        early_stopping_rounds=5, early_stopping_name=0
     )
-    # print(model.predict(valid_x, is_softmax=True))
+    print(model.predict(valid_x, is_softmax=False))
     # custom loss CE
     train_y = np.random.rand(n_data, n_class)
     valid_y = np.random.rand(n_data, n_class)
     model.fit(
-        train_x, train_y, loss_func=CrossEntropyLoss(n_class), num_boost_round=10,
+        train_x, train_y, loss_func=CrossEntropyLoss(n_class), num_iterations=10,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=[CrossEntropyLoss(n_class)],
         early_stopping_rounds=None, early_stopping_name=0, 
-        stopping_name="ce", stopping_val=3.70, stopping_rounds=1, stopping_is_over=True
+        stopping_name="ce", stopping_val=3.70, stopping_rounds=5, stopping_is_over=True
     )
-    # print(model.predict(valid_x, is_softmax=True))
+    print(model.predict(valid_x, is_softmax=False))

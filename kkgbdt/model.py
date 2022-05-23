@@ -21,19 +21,44 @@ __all__ = [
 
 
 class KkGBDT:
-    def __init__(self, num_class: int, mode: str="xgb", is_softmax: bool=False, n_jobs: int=1, **kwargs):
+    def __init__(
+        self, num_class: int, mode: str="xgb", is_softmax: bool=False, 
+        learning_rate: float=0.1, num_leaves: int=100, n_jobs: int=1, is_gpu: bool=False, 
+        random_seed: int=0, max_depth: int=0, min_child_samples: int=20, min_child_weight: float=1e-3,
+        subsample: float=1, colsample_bytree: float=0.5, colsample_bylevel: float=1, colsample_bynode: float=1,
+        reg_alpha: float=0, reg_lambda: float=0, min_split_gain: float=0,
+        max_bin: int=256, min_data_in_bin: int=5, **kwargs
+    ):
         logger.info("START")
         assert isinstance(num_class, int) and num_class > 0
         assert isinstance(mode, str) and mode in ["xgb", "lgb"]
         assert isinstance(is_softmax, bool)
+        assert isinstance(learning_rate, float) and learning_rate >= 1e-5 and learning_rate <= 1
+        assert isinstance(num_leaves, int) and num_leaves > 0
+        assert isinstance(n_jobs, int) and n_jobs > 0
+        assert isinstance(is_gpu, bool)
+        assert isinstance(random_seed, int) and random_seed >= 0
+        assert isinstance(max_depth, int) and max_depth >= 0
+        assert isinstance(min_child_samples, int) and min_child_samples > 0
+        assert check_type(min_child_weight, [float, int]) and min_child_weight >= 1e-5
+        assert check_type(subsample, [float, int]) and subsample > 0 and subsample <= 1
+        assert check_type(colsample_bytree,  [float, int]) and colsample_bytree  > 0 and colsample_bytree  <= 1
+        assert check_type(colsample_bylevel, [float, int]) and colsample_bylevel > 0 and colsample_bylevel <= 1
+        assert check_type(colsample_bynode,  [float, int]) and colsample_bynode  > 0 and colsample_bynode  <= 1
+        assert check_type(reg_alpha,  [float, int]) and reg_alpha >= 0
+        assert check_type(reg_lambda, [float, int]) and reg_alpha >= 0
+        assert check_type(min_split_gain, [float, int]) and min_split_gain >= 0
+        assert isinstance(max_bin, int) and max_bin > 10
+        assert isinstance(min_data_in_bin, int) and min_data_in_bin > 1
         self.booster = None
         self.mode    = mode
-        self.params  = {}
-        self.params["num_class"] = num_class
-        if mode == "xgb":
-            self.params["nthread"]     = n_jobs
-        else:
-            self.params["num_threads"] = n_jobs
+        self.params  = alias_parameter(
+            mode=self.mode, num_class=num_class, learning_rate=learning_rate, num_leaves=num_leaves, n_jobs=n_jobs, is_gpu=is_gpu, 
+            random_seed=random_seed, max_depth=max_depth, min_child_samples=min_child_samples, min_child_weight=min_child_weight,
+            subsample=subsample, colsample_bytree=colsample_bytree, colsample_bylevel=colsample_bylevel,
+            colsample_bynode=colsample_bynode, reg_alpha=reg_alpha, reg_lambda=reg_lambda, 
+            min_split_gain=min_split_gain, max_bin=max_bin, min_data_in_bin=min_data_in_bin
+        )
         self.params.update(copy.deepcopy(kwargs))
         self.evals_result = {}
         self.classes_     = np.arange(num_class, dtype=int)
@@ -47,7 +72,7 @@ class KkGBDT:
         logger.info(f"params: {self.params}")
         logger.info("END")
     def fit(
-        self, x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss]=None, num_boost_round: int=None,
+        self, x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss]=None, num_iterations: int=None,
         x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None,
         loss_func_eval: Union[str, Loss]=None, early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
         stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
@@ -55,9 +80,9 @@ class KkGBDT:
     ):
         logger.info("START")
         assert loss_func is not None
-        assert num_boost_round is not None
+        assert num_iterations is not None
         self.booster = self.train_func(
-            copy.deepcopy(self.params), num_boost_round, x_train, y_train, loss_func,
+            copy.deepcopy(self.params), num_iterations, x_train, y_train, loss_func,
             evals_result=self.evals_result, x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
             early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
             stopping_name=stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, 
@@ -93,7 +118,7 @@ class KkGBDT:
 
 def train_xgb(
     # fitting parameter
-    params: dict, num_boost_round: int,
+    params: dict, num_iterations: int,
     # training data & loss
     x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss], evals_result: dict={}, 
     # validation data & loss
@@ -121,7 +146,7 @@ def train_xgb(
     assert isinstance(x_train, np.ndarray) and len(x_train.shape) == 2
     assert isinstance(y_train, np.ndarray) and len(y_train.shape) in [1, 2]
     assert isinstance(loss_func, str) or isinstance(loss_func, Loss)
-    assert isinstance(num_boost_round, int) and num_boost_round > 0
+    assert isinstance(num_iterations, int) and num_iterations > 0
     assert isinstance(evals_result, dict)
     if x_valid is None: x_valid = []
     if y_valid is None: y_valid = []
@@ -203,7 +228,7 @@ def train_xgb(
     # train
     model = xgb.train(
         params, dataset_train, 
-        num_boost_round=num_boost_round, evals=dataset_valid, obj=_loss_func,
+        num_boost_round=num_iterations, evals=dataset_valid, obj=_loss_func,
         custom_metric=_loss_func_eval, maximize=False, early_stopping_rounds=None,
         evals_result=evals_result, verbose_eval=False, xgb_model=None,
         callbacks=callbacks
@@ -214,7 +239,7 @@ def train_xgb(
 
 def train_lgb(
     # fitting parameter
-    params: dict, num_boost_round: int,
+    params: dict, num_iterations: int,
     # training data & loss
     x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss], evals_result: dict={}, 
     # validation data & loss
@@ -242,7 +267,7 @@ def train_lgb(
     assert isinstance(x_train, np.ndarray) and len(x_train.shape) == 2
     assert isinstance(y_train, np.ndarray) and len(y_train.shape) in [1, 2]
     assert isinstance(loss_func, str) or isinstance(loss_func, Loss)
-    assert isinstance(num_boost_round, int) and num_boost_round > 0
+    assert isinstance(num_iterations, int) and num_iterations > 0
     assert isinstance(evals_result, dict)
     if x_valid is None: x_valid = []
     if y_valid is None: y_valid = []
@@ -256,7 +281,7 @@ def train_lgb(
     # check params
     if params.get("objective") is not None: logger.raise_error(f"please set 'objective' parameter to 'loss_func'.")
     if params.get("metric")    is not None: logger.raise_error(f"please set 'metric'    parameter to 'loss_func_eval'.")
-    params["num_iterations"] = num_boost_round
+    params["num_iterations"] = num_iterations
     params["verbosity"]      = -1
     # dataset option
     if sample_weight is not None:
@@ -317,9 +342,71 @@ def train_lgb(
     # train
     model = lgb.train(
         params, dataset_train, 
-        valid_sets=dataset_valid, valid_names=["train"]+["valid"+str(i) for i in range(len(dataset_valid)-1)],
+        valid_sets=dataset_valid, valid_names=["train"]+[f"valid_{i}" for i in range(len(dataset_valid)-1)],
         fobj=_loss_func, feval=_loss_func_eval, evals_result=evals_result,
         callbacks=callbacks
     )
     logger.info("END")
     return model
+
+
+def alias_parameter(
+    mode: str="xgb",
+    num_class: int=None, learning_rate: float=None, num_leaves: int=None, n_jobs: int=None, is_gpu: bool=None, 
+    random_seed: int=0, max_depth: int=None, min_child_samples: int=None, min_child_weight: float=None,
+    subsample: float=None, colsample_bytree: float=None, colsample_bylevel: float=None,
+    colsample_bynode: float=None, reg_alpha: float=None, reg_lambda: float=None, 
+    min_split_gain: float=None, max_bin: int=None, min_data_in_bin: int=None, 
+):
+    logger.info(f"START. mode={mode}")
+    assert isinstance(mode, str) and mode in ["xgb", "lgb"]
+    params = {}
+    if mode == "xgb":
+        params["num_class"]   = num_class
+        params["eta"]         = learning_rate
+        params["max_leaves"]  = num_leaves
+        params["nthread"]     = n_jobs
+        params["tree_method"] = "hist" if is_gpu is None or is_gpu == False else "gpu_hist"
+        params["seed"]        = random_seed
+        params["max_depth"]   = max_depth
+        # min_child_samples is not in configlation
+        params["min_child_weight"]  = min_child_weight
+        params["subsample"]         = subsample
+        params["colsample_bytree"]  = colsample_bytree
+        params["colsample_bylevel"] = colsample_bylevel
+        params["colsample_bynode"]  = colsample_bynode
+        params["alpha"]             = reg_alpha
+        params["lambda"]            = reg_lambda
+        params["gamma"]             = min_split_gain # Maybe different from xgb and lgb
+        params["max_bin"]           = max_bin
+        # min_data_in_bin is not in configlation
+        for x in ["min_child_weight", "min_data_in_bin"]:
+            if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
+    else:
+        params["num_class"]               = num_class
+        params["learning_rate"]           = learning_rate
+        params["num_leaves"]              = num_leaves
+        params["num_threads"]             = n_jobs
+        params["device_type"]             = "cpu" if is_gpu is None or is_gpu == False else "gpu"
+        params["seed"]                    = random_seed
+        params["max_depth"]               = max_depth
+        params["min_data_in_leaf"]        = min_child_samples
+        params["min_sum_hessian_in_leaf"] = min_child_weight
+        params["bagging_fraction"]        = subsample
+        if subsample is not None and subsample != 1:
+            params["bagging_freq"]        = 1
+        params["feature_fraction"]        = colsample_bytree
+        # colsample_bylevel is not in configlation
+        params["feature_fraction_bynode"] = colsample_bynode
+        params["lambda_l1"]               = reg_alpha
+        params["lambda_l2"]               = reg_lambda
+        params["min_gain_to_split"]       = min_split_gain
+        params["max_bin"]                 = max_bin
+        params["min_data_in_bin"]         = min_data_in_bin
+        for x in ["colsample_bylevel"]:
+            if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
+    _params = {}
+    for x, y in params.items():
+        if y is not None: _params[x] = y
+    logger.info("END")
+    return _params
