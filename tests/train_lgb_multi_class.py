@@ -12,11 +12,10 @@ if __name__ == "__main__":
     model   = KkGBDT(n_class, mode="lgb", subsample=0.5)
     # public loss
     model.fit(
-        train_x, train_y, loss_func="multiclass", num_iterations=10,
+        train_x, train_y, loss_func="multiclass", num_iterations=50,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass"],
-        early_stopping_rounds=None, early_stopping_name=0
+        early_stopping_rounds=10, early_stopping_name=0
     )
-    raise
     print(model.predict(valid_x, is_softmax=False))
     # custom loss CategoryCE
     model.fit(

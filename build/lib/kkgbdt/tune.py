@@ -35,9 +35,9 @@ def tune_parameter(
     params_search='''{
         "min_child_weight" : trial.suggest_loguniform("min_child_weight", 1e-4, 1e3),
         "colsample_bytree" : trial.suggest_loguniform("colsample_bytree", 0.001, 0.5),
-        "reg_alpha"        : trial.suggest_loguniform("alpha",  1e-4, 1e3),
-        "reg_lambda"       : trial.suggest_loguniform("lambda", 1e-4, 1e3),
-        "min_split_gain"   : trial.suggest_loguniform("gamma", 1e-10, 1.0),
+        "reg_alpha"        : trial.suggest_loguniform("reg_alpha",  1e-4, 1e3),
+        "reg_lambda"       : trial.suggest_loguniform("reg_lambda", 1e-4, 1e3),
+        "min_split_gain"   : trial.suggest_loguniform("min_split_gain", 1e-10, 1.0),
     }'''
 ):
     """

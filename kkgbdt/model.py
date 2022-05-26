@@ -17,6 +17,8 @@ logger = set_logger(__name__)
 __all__ = [
     "KkGBDT",
     "train_xgb",
+    "train_lgb",
+    "alias_parameter",
 ]
 
 
@@ -303,12 +305,12 @@ def train_lgb(
     dataset_train = DatasetLGB(x_train, label=y_train, weight=sample_weight, categorical_feature=categorical_features)
     dataset_valid = [dataset_train] + [DatasetLGB(_x_valid, label=_y_valid) for _x_valid, _y_valid in zip(x_valid, y_valid)]
     # loss setting
-    _loss_func, _loss_func_eval = None, None
+    _loss_func_eval = None
     params["metric"] = []
     if isinstance(loss_func, str):
         params["objective"] = loss_func
     else:
-        _loss_func = LGBCustomObjective(loss_func, mode="lgb")
+        params["objective"] = LGBCustomObjective(loss_func, mode="lgb")
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
             if isinstance(func_eval, str):
@@ -330,6 +332,12 @@ def train_lgb(
             assert (early_stopping_name >= 0) and (loss_func_eval is not None) 
             metric_name = loss_func_eval[early_stopping_name]
             if isinstance(metric_name, Loss): metric_name = metric_name.name
+            else:
+                dict_conv = {
+                    "multiclass": "multi_logloss",
+                }
+                assert metric_name in dict_conv
+                metric_name = dict_conv[metric_name]
         else:
             metric_name = early_stopping_name
         callbacks.append(callback_best_iter(dict_eval_best, early_stopping_rounds, metric_name))
@@ -343,8 +351,7 @@ def train_lgb(
     model = lgb.train(
         params, dataset_train, 
         valid_sets=dataset_valid, valid_names=["train"]+[f"valid_{i}" for i in range(len(dataset_valid)-1)],
-        fobj=_loss_func, feval=_loss_func_eval, evals_result=evals_result,
-        callbacks=callbacks
+        feval=_loss_func_eval, callbacks=callbacks
     )
     logger.info("END")
     return model
@@ -388,6 +395,9 @@ def alias_parameter(
         params["num_leaves"]              = num_leaves
         params["num_threads"]             = n_jobs
         params["device_type"]             = "cpu" if is_gpu is None or is_gpu == False else "gpu"
+        if is_gpu is not None and is_gpu:
+            params["gpu_platform_id"]     = 0
+            params["gpu_device_id"]       = 0
         params["seed"]                    = random_seed
         params["max_depth"]               = max_depth
         params["min_data_in_leaf"]        = min_child_samples
@@ -401,7 +411,7 @@ def alias_parameter(
         params["lambda_l1"]               = reg_alpha
         params["lambda_l2"]               = reg_lambda
         params["min_gain_to_split"]       = min_split_gain
-        params["max_bin"]                 = max_bin
+        params["max_bin"]                 = max_bin - 1
         params["min_data_in_bin"]         = min_data_in_bin
         for x in ["colsample_bylevel"]:
             if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")

@@ -92,7 +92,7 @@ def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, i
         if not dict_eval: _init(env)
         count = -1
         for data_name, eval_name, result, is_higher_better in env.evaluation_result_list:
-            if data_name == "valid0":
+            if data_name == "valid_0":
                 count += 1
                 if (isinstance(name, int) and count == name) or (isinstance(name, str) and eval_name == name):
                     if dict_eval["best_score"] is None:
