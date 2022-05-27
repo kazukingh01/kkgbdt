@@ -305,12 +305,12 @@ def train_lgb(
     dataset_train = DatasetLGB(x_train, label=y_train, weight=sample_weight, categorical_feature=categorical_features)
     dataset_valid = [dataset_train] + [DatasetLGB(_x_valid, label=_y_valid) for _x_valid, _y_valid in zip(x_valid, y_valid)]
     # loss setting
-    _loss_func_eval = None
+    _loss_func, _loss_func_eval = None, None
     params["metric"] = []
     if isinstance(loss_func, str):
         params["objective"] = loss_func
     else:
-        params["objective"] = LGBCustomObjective(loss_func, mode="lgb")
+        _loss_func = LGBCustomObjective(loss_func, mode="lgb")
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
             if isinstance(func_eval, str):
@@ -349,7 +349,7 @@ def train_lgb(
         )
     # train
     model = lgb.train(
-        params, dataset_train, 
+        params, dataset_train, fobj=_loss_func,
         valid_sets=dataset_valid, valid_names=["train"]+[f"valid_{i}" for i in range(len(dataset_valid)-1)],
         feval=_loss_func_eval, callbacks=callbacks
     )
