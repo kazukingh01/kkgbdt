@@ -67,7 +67,7 @@ def callback_stop_training(dict_train: dict, stopping_val: float, stopping_round
         if check_type(stopping_train_time, [int, float]) and ((time.time() - dict_train["time"]) > stopping_train_time):
             logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
             raise EarlyStopException(env.iteration, env.evaluation_result_list)
-        if isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds:
+        if check_type(stopping_val, [float, int]) and isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds:
             if stopping_is_over and result > stopping_val:
                 logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
                 raise EarlyStopException(env.iteration, env.evaluation_result_list)
