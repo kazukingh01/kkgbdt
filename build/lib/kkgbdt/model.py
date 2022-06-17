@@ -335,6 +335,7 @@ def train_lgb(
             else:
                 dict_conv = {
                     "multiclass": "multi_logloss",
+                    "binary": "binary_logloss",
                 }
                 assert metric_name in dict_conv
                 metric_name = dict_conv[metric_name]
