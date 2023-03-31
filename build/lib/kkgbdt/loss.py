@@ -158,7 +158,7 @@ class BinaryCrossEntropyLoss(Loss):
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = sigmoid(x)
-        x = np.clip(x, self.dx, 1)
+        x = np.clip(x, self.dx, 1 - self.dx)
         grad = x - t
         hess = (1 - x) * x
         return grad, hess

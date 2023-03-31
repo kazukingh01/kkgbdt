@@ -29,7 +29,7 @@ def tune_parameter(
         "subsample"        : 1,
         "colsample_bylevel": 1,
         "colsample_bynode" : 1,
-        "max_bin"          : 256,
+        "max_bin"          : 255,
         "min_data_in_bin"  : 5,
     },
     params_search='''{
@@ -53,7 +53,7 @@ def tune_parameter(
         >>> from functools import partial
         >>> from kkgbdt.tune import parameter_tune
         >>> func = partial(parameter_tune,
-                num_class=num_class, eval_string='model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration]',
+                num_class=num_class, eval_string='model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration - 1]',
                 x_train=x_train, y_train=y_train, loss_func="multi:softmax", num_iterations=10,
                 x_valid=x_valid, y_valid=y_valid, loss_func_eval="mlogloss", 
             )
