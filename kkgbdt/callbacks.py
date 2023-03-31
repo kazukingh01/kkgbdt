@@ -3,7 +3,7 @@ from typing import List, Union
 from xgboost.callback import TrainingCallback
 from lightgbm.callback import EarlyStopException, _format_eval_result
 from kkgbdt.util.com import check_type
-from kkgbdt.util.logger import set_logger, MyLogger
+from kkgbdt.util.logger import set_logger
 logger = set_logger(__name__)
 
 
@@ -97,9 +97,12 @@ def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, i
                 if (isinstance(name, int) and count == name) or (isinstance(name, str) and eval_name == name):
                     if dict_eval["best_score"] is None:
                         dict_eval["best_score"] = result
+                        dict_eval["eval_name"]  = eval_name
+                        dict_eval["best_iter"]  = env.iteration
+                        dict_eval["best_result_list"] = env.evaluation_result_list
                     else:
                         boolwk = result > dict_eval["best_score"] if is_higher_better else dict_eval["best_score"] > result
-                        if boolwk or (env.iteration <= 1):
+                        if boolwk:
                             dict_eval["best_score"] = result
                             dict_eval["eval_name"]  = eval_name
                             dict_eval["best_iter"]  = env.iteration
@@ -116,6 +119,6 @@ def print_evaluation(period=1, show_stdv=True):
     def _callback(env):
         if period > 0 and env.evaluation_result_list and (env.iteration + 1) % period == 0:
             result = '\t'.join([_format_eval_result(x, show_stdv) for x in env.evaluation_result_list])
-            logger.info('[%d]\t%s' % (env.iteration + 1, result))
+            logger.info('[%d]\t%s' % (env.iteration, result))
     _callback.order = 10
     return _callback
