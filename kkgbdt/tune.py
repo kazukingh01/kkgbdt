@@ -33,13 +33,13 @@ def tune_parameter(
         "min_data_in_bin"  : 5,
     },
     params_search='''{
-        "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3),
+        "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
         "colsample_bytree" : trial.suggest_float("colsample_bytree", 0.001, 0.5),
-        "reg_alpha"        : trial.suggest_float("reg_alpha",  1e-4, 1e3),
-        "reg_lambda"       : trial.suggest_float("reg_lambda", 1e-4, 1e3),
-        "min_split_gain"   : trial.suggest_float("min_split_gain", 1e-10, 1.0),
+        "reg_alpha"        : trial.suggest_float("reg_alpha",  1e-4, 1e3, log=True),
+        "reg_lambda"       : trial.suggest_float("reg_lambda", 1e-4, 1e3, log=True),
+        "min_split_gain"   : trial.suggest_float("min_split_gain", 1e-10, 1.0, log=True),
         "min_child_samples": trial.suggest_int("min_child_samples", 2, 200),
-        "path_smooth"      : trial.suggest_float("path_smooth", 1e-2, 10.0),
+        "path_smooth"      : trial.suggest_float("path_smooth", 1e-2, 1e2, log=True),
     }'''
 ):
     """
