@@ -29,7 +29,7 @@ def tune_parameter(
         "subsample"        : 1,
         "colsample_bylevel": 1,
         "colsample_bynode" : 1,
-        "max_bin"          : 255,
+        "max_bin"          : 256, # it's fine. In kkgbdt, reduse -1.
         "min_data_in_bin"  : 5,
     },
     params_search='''{
