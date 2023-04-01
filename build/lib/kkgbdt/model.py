@@ -248,7 +248,7 @@ def train_lgb(
     x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None, loss_func_eval: Union[str, Loss]=None,
     # early stopping parameter
     early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
-    stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
+    stopping_name:str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
     # option
     sample_weight: Union[str, np.ndarray]=None, categorical_features: List[int]=None
 ):
@@ -343,7 +343,7 @@ def train_lgb(
             metric_name = early_stopping_name
         callbacks.append(callback_best_iter(dict_eval_best, early_stopping_rounds, metric_name))
     ## train stopping
-    if stopping_val is not None or stopping_train_time is not None
+    if stopping_val is not None or stopping_train_time is not None:
         assert stopping_val is None or isinstance(stopping_val, float)
         if stopping_train_time is not None:
             assert isinstance(stopping_train_time, float)
