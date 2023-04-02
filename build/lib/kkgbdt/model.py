@@ -1,5 +1,6 @@
 import copy
 import numpy as np
+from sklearn.utils.class_weight import compute_sample_weight
 import xgboost as xgb
 import lightgbm as lgb
 from xgboost.callback import EarlyStopping
@@ -169,11 +170,9 @@ def train_xgb(
             assert sample_weight in ["balanced"]
             assert len(y_train.shape) == 1 and y_train.dtype in [int, np.int16, np.int32, np.int64]
             assert np.unique(y_train).shape == np.bincount(y_train).shape
-            sample_weight = np.bincount(y_train)
-            sample_weight = sample_weight.min() / sample_weight
-            sample_weight = sample_weight[y_train]
+            sample_weight = compute_sample_weight(sample_weight, y_train)
         else:
-            assert len(sample_weight.shape) == 1 and y_train.shape[0] == sample_weight.shape[0]
+            assert len(sample_weight.shape) == 1 and len(y_train.shape) == 1 and y_train.shape[0] == sample_weight.shape[0]
     enable_categorical = False
     if categorical_features is not None:
         assert check_type_list(categorical_features, int)
@@ -292,11 +291,9 @@ def train_lgb(
             assert sample_weight in ["balanced"]
             assert len(y_train.shape) == 1 and y_train.dtype in [int, np.int16, np.int32, np.int64]
             assert np.unique(y_train).shape == np.bincount(y_train).shape
-            sample_weight = np.bincount(y_train)
-            sample_weight = sample_weight.min() / sample_weight
-            sample_weight = sample_weight[y_train]
+            sample_weight = compute_sample_weight(sample_weight, y_train) # https://github.com/microsoft/LightGBM/blob/a5285985992ebd376c356a0ac1d10a190338550b/python-package/lightgbm/sklearn.py#L771
         else:
-            assert len(sample_weight.shape) == 1 and y_train.shape[0] == sample_weight.shape[0]
+            assert len(sample_weight.shape) == 1 and len(y_train.shape) == 1 and y_train.shape[0] == sample_weight.shape[0]
     if categorical_features is not None:
         assert check_type_list(categorical_features, int)
     else:

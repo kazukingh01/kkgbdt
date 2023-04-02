@@ -15,7 +15,7 @@ if __name__ == "__main__":
     model.fit(
         train_x, train_y, loss_func="multiclass", num_iterations=50,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass"],
-        early_stopping_rounds=10, early_stopping_name=0
+        early_stopping_rounds=10, early_stopping_name=0, sample_weight="balanced",
     )
     print(model.predict(valid_x, is_softmax=False))
     print(f"best iteration the model.booster have is: {model.booster.best_iteration}")
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     model.fit(
         train_x, train_y, loss_func=CategoricalCrossEntropyLoss(n_class), num_iterations=10,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=[CategoricalCrossEntropyLoss(n_class), "multiclass"],
-        early_stopping_rounds=5, early_stopping_name=0
+        early_stopping_rounds=5, early_stopping_name=0, sample_weight="balanced",
     )
     print(model.predict(valid_x, is_softmax=False))
     # custom loss CE

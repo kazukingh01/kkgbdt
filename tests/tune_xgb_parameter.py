@@ -31,11 +31,11 @@ if __name__ == "__main__":
             "min_data_in_bin"  : 5,
         },
         params_search='''{
-            "min_child_weight" : trial.suggest_loguniform("min_child_weight", 1e-4, 1e3),
-            "colsample_bytree" : trial.suggest_loguniform("colsample_bytree", 0.001, 0.5),
-            "reg_alpha"        : trial.suggest_loguniform("alpha",  1e-4, 1e3),
-            "reg_lambda"       : trial.suggest_loguniform("lambda", 1e-4, 1e3),
-            "min_split_gain"   : trial.suggest_loguniform("gamma", 1e-10, 1.0),
+            "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
+            "colsample_bytree" : trial.suggest_float("colsample_bytree", 0.001, 0.5, log=True),
+            "reg_alpha"        : trial.suggest_float("alpha",  1e-4, 1e3, log=True),
+            "reg_lambda"       : trial.suggest_float("lambda", 1e-4, 1e3, log=True),
+            "min_split_gain"   : trial.suggest_float("gamma", 1e-10, 1.0, log=True),
         }'''
     )
-    study.optimize(func, n_trials=100)
+    study.optimize(func, n_trials=10)

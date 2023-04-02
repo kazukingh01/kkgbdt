@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List
-from kkgbdt.dataset import Dataset
+from kkgbdt.dataset import DatasetXGB, DatasetLGB
 from kkgbdt.util.numpy import sigmoid, softmax
 from kkgbdt.util.com import check_type_list
 from scipy.misc import derivative
@@ -51,9 +51,9 @@ class Loss:
         x = self.conv_shape(x)
         return x, t
     def check(self, x: np.ndarray, t: np.ndarray):
-        print(f"input: {x}, \ninput shape{x.shape}\nlabel: {t}, \nlabel shape{t.shape}")
         assert isinstance(x, np.ndarray)
         assert isinstance(t, np.ndarray)
+        print(f"input: {x}\ninput shape: {x.shape}\ninput dtype: {x.dtype}\nlabel: {t}\nlabel shape: {t.shape}\nlabel dtype: {t.dtype}")
         assert x.shape[0] == t.shape[0]
         if self.n_classes > 1: assert x.shape[1] == self.n_classes
     def __call__(self, x: np.ndarray, t: np.ndarray):
@@ -73,23 +73,26 @@ class LGBCustomObjective:
         if   mode == "xgb":
             self.conv_input  = self.convert_xgb_input
             self.conv_output = self.convert_xgb_output
+            self.comp_weight = self.compute_xgb_weight
         elif mode == "lgb":
             self.conv_input  = self.convert_lgb_input
             self.conv_output = self.convert_lgb_output
-    def __call__(self, y_pred: np.ndarray, data: Dataset):
+            self.comp_weight = self.compute_lgb_weight
+    def __call__(self, y_pred: np.ndarray, data):
         y_pred, y_true = self.conv_input(y_pred, data)
         grad, hess = self.func_loss.gradhess(y_pred, y_true)
+        grad, hess = self.comp_weight(grad, hess, data)
         grad, hess = self.conv_output(grad, hess)
         return grad, hess
     @classmethod
-    def convert_xgb_input(cls, y_pred: np.ndarray, data: Dataset):
+    def convert_xgb_input(cls, y_pred: np.ndarray, data: DatasetXGB):
         if hasattr(data, "custom_label"):
             y_true = data.get_custom_label(data.get_label())
         else:
             y_true = data.get_label()
         return y_pred, y_true
     @classmethod
-    def convert_lgb_input(cls, y_pred: np.ndarray, data: Dataset):
+    def convert_lgb_input(cls, y_pred: np.ndarray, data: DatasetLGB):
         """
         Params::
             y_pred:
@@ -106,6 +109,24 @@ class LGBCustomObjective:
             # multi class case
             y_pred = y_pred.reshape(-1 , y_true.shape[0]).T
         return y_pred, y_true
+    @classmethod
+    def compute_xgb_weight(cls, grad: np.ndarray, hess: np.ndarray, data: DatasetXGB):
+        weight = data.get_weight()
+        if weight is None or len(weight) == 0: return grad, hess
+        if len(grad.shape) == 2:
+            weight = weight.reshape(-1, 1)
+        grad   = grad * weight
+        hess   = hess * weight
+        return grad, hess
+    @classmethod
+    def compute_lgb_weight(cls, grad: np.ndarray, hess: np.ndarray, data: DatasetLGB):
+        weight = data.get_weight()
+        if weight is None or len(weight) == 0: return grad, hess
+        if len(grad.shape) == 2:
+            weight = weight.reshape(-1, 1)
+        grad   = grad * weight
+        hess   = hess * weight
+        return grad, hess
     @classmethod
     def convert_xgb_output(cls, grad: np.ndarray, hess: np.ndarray):
         return grad.reshape(-1), hess.reshape(-1)
@@ -127,7 +148,7 @@ class LGBCustomEval(LGBCustomObjective):
             self.conv_metric = self.convert_xgb_metric
         elif mode == "lgb":
             self.conv_metric = self.convert_lgb_metric
-    def __call__(self, y_pred: np.ndarray, data: Dataset):
+    def __call__(self, y_pred: np.ndarray, data):
         y_pred, y_true = self.conv_input(y_pred, data)
         value = self.func_loss(y_pred, y_true)
         return self.conv_metric(value)

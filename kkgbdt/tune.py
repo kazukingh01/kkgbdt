@@ -39,7 +39,7 @@ def tune_parameter(
         "reg_lambda"       : trial.suggest_float("reg_lambda", 1e-4, 1e3, log=True),
         "min_split_gain"   : trial.suggest_float("min_split_gain", 1e-10, 1.0, log=True),
         "min_child_samples": trial.suggest_int("min_child_samples", 2, 200),
-        "path_smooth"      : trial.suggest_float("path_smooth", 1e-2, 1e2, log=True),
+        "path_smooth"      : trial.suggest_float("path_smooth", 1e-4, 1e2, log=True),
     }'''
 ):
     """
