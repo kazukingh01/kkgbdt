@@ -100,6 +100,7 @@ class KkGBDT:
         else:
             self.feature_importances_ = self.booster.feature_importance()
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
+        logger.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
         return self.predict_func(input, *args, is_softmax=is_softmax, **kwargs)
     def predict_xgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
         logger.info("START")
