@@ -74,6 +74,14 @@ class KkGBDT:
             self.predict_func = self.predict_lgb
         logger.info(f"params: {self.params}")
         logger.info("END")
+    def __copy__(self):
+        return self.__deepcopy__(None)
+    def __deepcopy__(self, _):
+        instance = copy.deepcopy(self)
+        for x in ["best_iteration", "best_score"]:
+            if hasattr(self.booster, x):
+                setattr(instance.booster, x, copy.deepcopy(getattr(self.booster, x)))
+        return instance
     def fit(
         self, x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss]=None, num_iterations: int=None,
         x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None,
