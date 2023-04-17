@@ -74,9 +74,7 @@ class KkGBDT:
             self.predict_func = self.predict_lgb
         logger.info(f"params: {self.params}")
         logger.info("END")
-    def __copy__(self):
-        return self.__deepcopy__(None)
-    def __deepcopy__(self, _):
+    def copy(self):
         instance = copy.deepcopy(self)
         for x in ["best_iteration", "best_score"]:
             if hasattr(self.booster, x):
