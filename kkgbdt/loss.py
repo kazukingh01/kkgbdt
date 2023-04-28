@@ -165,7 +165,13 @@ def calc_grad_hess(x: np.ndarray, t: np.ndarray, loss_func=None, dx=1e-6, **kwar
 
 
 class BinaryCrossEntropyLoss(Loss):
-    def __init__(self, dx: float=1e-5):
+    def __init__(self, dx: float=1e-10):
+        """
+        Params::
+            dx: Log loss is undefined for p=0 or p=1, so probabilities are
+                clipped to `max(eps, min(1 - eps, p))`. The default will depend on the
+                data type of `y_pred` and is set to `np.finfo(y_pred.dtype).eps`.
+        """
         super().__init__("bce", n_classes=1, target_dtype=np.int32, is_higher_better=False)
         self.dx = dx
     def check(self, x: np.ndarray, t: np.ndarray):
@@ -186,7 +192,7 @@ class BinaryCrossEntropyLoss(Loss):
 
 
 class CrossEntropyLoss(Loss):
-    def __init__(self, n_classes: int, dx: float=1e-5, target_dtype: np.dtype=np.float32):
+    def __init__(self, n_classes: int, dx: float=1e-10, target_dtype: np.dtype=np.float32):
         assert isinstance(n_classes, int) and n_classes > 1
         super().__init__("ce", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
         self.dx = dx
@@ -203,7 +209,7 @@ class CrossEntropyLoss(Loss):
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = np.clip(x, self.dx, 1 - self.dx)
         return (-1 * t * np.log(x)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         """
@@ -212,7 +218,7 @@ class CrossEntropyLoss(Loss):
         """
         x, t = self.convert(x, t)
         x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = np.clip(x, self.dx, 1 - self.dx)
         t_sum = self.conv_t_sum(t)
         grad  = t_sum * x - t
         hess  = t_sum * x * (1 - x)
@@ -220,7 +226,7 @@ class CrossEntropyLoss(Loss):
 
 
 class CrossEntropyLossArgmax(Loss):
-    def __init__(self, n_classes: int, dx: float=1e-5, target_dtype: np.dtype=np.float32):
+    def __init__(self, n_classes: int, dx: float=1e-10, target_dtype: np.dtype=np.float32):
         assert isinstance(n_classes, int) and n_classes > 1
         super().__init__("cemax", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
         self.dx = dx
@@ -239,7 +245,7 @@ class CrossEntropyLossArgmax(Loss):
         if len(t.shape) == 2: t = np.argmax(t, axis=1)
         else:                 t = t.astype(np.int32)
         x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = np.clip(x, self.dx, 1 - self.dx)
         x = x[np.arange(t.shape[0], dtype=int), t]
         return (-1 * np.log(x))
     def gradhess(self, x: np.ndarray, t: np.ndarray):
@@ -247,7 +253,7 @@ class CrossEntropyLossArgmax(Loss):
 
 
 class CategoricalCrossEntropyLoss(CrossEntropyLoss):
-    def __init__(self, n_classes: int, dx: float=1e-5, smoothing: float=False):
+    def __init__(self, n_classes: int, dx: float=1e-10, smoothing: float=False):
         assert (isinstance(smoothing, bool) and smoothing == False) or (isinstance(smoothing, float) and 0.0 < smoothing < 1.0)
         super().__init__(n_classes, dx=dx, target_dtype=np.int32)
         self.smoothing = smoothing
@@ -267,7 +273,7 @@ class CategoricalCrossEntropyLoss(CrossEntropyLoss):
 
 
 class FocalLoss(Loss):
-    def __init__(self, n_classes: int, gamma: float=1.0, dx: float=1e-5):
+    def __init__(self, n_classes: int, gamma: float=1.0, dx: float=1e-10):
         assert isinstance(n_classes, int) and n_classes > 1
         super().__init__("fl", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
         self.gamma = gamma
@@ -279,7 +285,7 @@ class FocalLoss(Loss):
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = np.clip(x, self.dx, 1 - self.dx)
         t = np.identity(x.shape[1])[t].astype(bool)
         return -1 * ((1 - x[t]) ** self.gamma) * np.log(x[t])
     def gradhess(self, x: np.ndarray, t: np.ndarray):
@@ -288,7 +294,7 @@ class FocalLoss(Loss):
         """
         x, t = self.convert(x, t)
         x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = np.clip(x, self.dx, 1 - self.dx)
         t = np.identity(x.shape[1])[t].astype(bool)
         yk = x[t].reshape(-1, 1)
         grad    = x * ((1 - yk) ** (self.gamma - 1)) * (-self.gamma * yk * np.log(yk) + 1 - yk)
@@ -379,7 +385,7 @@ class Accuracy(Loss):
 class LogitMarginL1Loss(Loss):
     def __init__(
         self, n_classes: int, alpha: float=0.1, margin: float=10.0, 
-        dx: float=1e-5, target_dtype: np.dtype=np.float32
+        dx: float=1e-10, target_dtype: np.dtype=np.float32
     ):
         """
         https://arxiv.org/pdf/2111.15430.pdf
@@ -405,7 +411,7 @@ class LogitMarginL1Loss(Loss):
         x, t = self.convert(x, t)
         x_margin = np.clip(np.max(x, axis=1).reshape(-1, 1) - x - self.margin, 0.0, None)
         x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = np.clip(x, self.dx, 1 - self.dx)
         loss_ce     = (-1 * t * np.log(x)).sum(axis=1)
         loss_margin = self.alpha * np.sum(x_margin, axis=1)
         return loss_ce + loss_margin
@@ -415,7 +421,7 @@ class LogitMarginL1Loss(Loss):
         x_margin = (x_margin > 0).astype(x.dtype)
         x_margin[np.arange(x_margin.shape[0]), np.argmax(x, axis=1)] = 0
         x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = np.clip(x, self.dx, 1 - self.dx)
         t_sum = self.conv_t_sum(t)
         grad  = t_sum * x - t - (self.alpha * x_margin)
         hess  = t_sum * x * (1 - x)
@@ -516,3 +522,39 @@ class CrossEntropyNDCGLoss(Loss):
     @classmethod
     def NDCG(cls, x: np.ndarray, t: np.ndarray):
         return __class__.DCG(x, t) / __class__.DCG(t, t)
+
+
+class DensitySoftmax(Loss):
+    def __init__(self, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10):
+        """
+        https://arxiv.org/abs/2302.06495
+        """
+        assert isinstance(n_classes, int) and n_classes > 2
+        assert isinstance(learning_rate, float) and learning_rate > 0.
+        super().__init__("densitysoftmax", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
+        self.lr     = learning_rate
+        self.dx     = dx
+        self.weight = np.random.rand(n_classes, n_classes)
+    def check(self, x: np.ndarray, t: np.ndarray):
+        super().check(x, t)
+        assert len(x.shape) == 2
+        assert len(t.shape) == 1
+        assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
+    def convert(self, x: np.ndarray, t: np.ndarray):
+        x, t = super().convert(x, t)
+        t = np.identity(x.shape[1])[t].astype(np.float32)
+        return x, t
+    def loss(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        val  = np.einsum("ab,bc->ac", x, self.weight)
+        val  = softmax(val)
+        val  = np.clip(val, self.dx, 1 - self.dx)
+        return (-1 * t * np.log(val)).sum(axis=1)
+    def gradhess(self, x: np.ndarray, t: np.ndarray):
+        grad, hess = calc_grad_hess(x, t, loss_func=self.loss, dx=1e-6)
+        x = softmax(x)
+        x = np.clip(x, self.dx, 1 - self.dx)
+        t_sum = self.conv_t_sum(t)
+        grad  = t_sum * x - t
+        hess  = t_sum * x * (1 - x)
+        return grad, hess

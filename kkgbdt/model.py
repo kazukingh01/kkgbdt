@@ -113,6 +113,7 @@ class KkGBDT:
         output = self.booster.predict(DatasetXGB(input), *args, output_margin=True, **kwargs)
         if is_softmax is None: is_softmax = self.is_softmax
         if is_softmax:
+            logger.info("softmax output...")
             output = softmax(output)
         logger.info("END")
         return output
@@ -121,6 +122,7 @@ class KkGBDT:
         output = self.booster.predict(input, *args, **kwargs)
         if is_softmax is None: is_softmax = self.is_softmax
         if is_softmax:
+            logger.info("softmax output...")
             output = softmax(output)
         logger.info("END")
         return output
