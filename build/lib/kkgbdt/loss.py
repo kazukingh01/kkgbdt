@@ -275,7 +275,8 @@ class CategoricalCrossEntropyLoss(CrossEntropyLoss):
 class FocalLoss(Loss):
     def __init__(self, n_classes: int, gamma: float=1.0, dx: float=1e-10):
         assert isinstance(n_classes, int) and n_classes > 1
-        super().__init__("fl", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
+        assert isinstance(gamma, float) and gamma >= 0
+        super().__init__(f"fl({gamma})", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
         self.gamma = gamma
         self.dx    = dx
     def check(self, x: np.ndarray, t: np.ndarray):
