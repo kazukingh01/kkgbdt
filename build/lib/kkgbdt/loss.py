@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List
+from functools import partial
 from kkgbdt.dataset import DatasetXGB, DatasetLGB
 from kkgbdt.util.numpy import sigmoid, softmax
 from kkgbdt.util.com import check_type_list
@@ -28,6 +29,12 @@ __all__ = [
 ]
 
 
+def _return(x): return x
+def _return_1(x): return 1.0
+def _reshape(x): return x.reshape(-1)
+def _sum_reshape(x): return x.sum(axis=1).reshape(-1, 1)
+
+
 class Loss:
     def __init__(self, name: str, n_classes: int=1, target_dtype: np.dtype=np.int32, reduction: str="mean", is_higher_better: bool=False):
         assert isinstance(n_classes, int) and n_classes >= 0
@@ -37,9 +44,9 @@ class Loss:
         self.name         = name
         self.n_classes    = n_classes
         self.target_dtype = target_dtype
-        self.conv_shape   = lambda x: x
+        self.conv_shape   = _return
         self.is_check     = True
-        self.reduction    = (lambda x: np.mean(x)) if reduction == "mean" else (lambda x: np.sum(x))
+        self.reduction    = np.mean if reduction == "mean" else np.sum
         self.is_higher_better = is_higher_better
     def __str__(self):
         return f"{self.__class__.__name__}({self.name})"
@@ -47,7 +54,7 @@ class Loss:
         t = t.astype(self.target_dtype)
         if self.is_check:
             self.check(x, t)
-            if self.n_classes == 1: self.conv_shape = lambda x: x.reshape(-1)
+            if self.n_classes == 1: self.conv_shape = _reshape
             self.is_check = False
         x = self.conv_shape(x)
         return x, t
@@ -197,7 +204,7 @@ class CrossEntropyLoss(Loss):
         assert isinstance(n_classes, int) and n_classes > 1
         super().__init__("ce", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
         self.dx = dx
-        self.conv_t_sum = lambda x: 1.0
+        self.conv_t_sum = _return_1
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         if self.name == "ce":
@@ -206,7 +213,7 @@ class CrossEntropyLoss(Loss):
             assert x.shape[1] == t.shape[1] == self.n_classes
             if ((t.sum(axis=1) / self.dx).round(0).astype(np.int32) == int(round(1 / self.dx, 0))).sum() != t.shape[0]:
                 # If the sum of "t" is not equal to 1 (In other words, if "t" is not a probability)
-                self.conv_t_sum = lambda x: x.sum(axis=1).reshape(-1, 1)
+                self.conv_t_sum = _sum_reshape
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
@@ -231,7 +238,7 @@ class CrossEntropyLossArgmax(Loss):
         assert isinstance(n_classes, int) and n_classes > 1
         super().__init__("cemax", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
         self.dx = dx
-        self.conv_t_sum = lambda x: 1.0
+        self.conv_t_sum = _return_1
         self.indexes    = None
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
@@ -364,13 +371,13 @@ class Accuracy(Loss):
         assert isinstance(top_k, int) and top_k >= 1
         self.top_k = top_k
         super().__init__(f"acc_top{self.top_k}", n_classes=0, target_dtype=np.float32, is_higher_better=True)
-        self.conv_shape_t = lambda x: x
+        self.conv_shape_t = _return
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         assert len(x.shape) == 2
         assert len(t.shape) in [1, 2]
         if len(t.shape) == 2:
-            self.conv_shape_t = lambda x: np.argmax(x, axis=1)
+            self.conv_shape_t = partial(np.argmax, axis=1)
     def convert(self, x: np.ndarray, t: np.ndarray):
         x, t = super().convert(x, t)
         t = self.conv_shape_t(t)
@@ -400,7 +407,7 @@ class LogitMarginL1Loss(Loss):
         self.margin = margin
         super().__init__(f"ce_margin_{self.alpha}_{self.margin}", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
         self.dx = dx
-        self.conv_t_sum = lambda x: 1.0
+        self.conv_t_sum = _return_1
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         assert len(x.shape) == 2
@@ -408,7 +415,7 @@ class LogitMarginL1Loss(Loss):
         assert x.shape[1] == t.shape[1] == self.n_classes
         if ((t.sum(axis=1) / self.dx).round(0).astype(np.int32) == int(round(1 / self.dx, 0))).sum() != t.shape[0]:
             # If the sum of "t" is not equal to 1 (In other words, if "t" is not a probability)
-            self.conv_t_sum = lambda x: x.sum(axis=1).reshape(-1, 1)
+            self.conv_t_sum = _sum_reshape
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x_margin = np.clip(np.max(x, axis=1).reshape(-1, 1) - x - self.margin, 0.0, None)
