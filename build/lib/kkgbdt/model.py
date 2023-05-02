@@ -95,6 +95,18 @@ class KkGBDT:
         self.loss = loss_func
         if isinstance(self.loss, Loss) and hasattr(self.loss, "inference"):
             self.inference = self.loss.inference
+        # common processing
+        if loss_func_eval is not None:
+            if not isinstance(loss_func_eval, list): loss_func_eval = [loss_func_eval, ]
+            _loss_func_eval = []
+            for func_eval in loss_func_eval:
+                if isinstance(func_eval, str) and func_eval == "__copy__":
+                    assert isinstance(loss_func, Loss)
+                    _loss_func_eval.append(loss_func)
+                else:
+                    _loss_func_eval.append(func_eval)
+            loss_func_eval = _loss_func_eval
+        # training
         self.booster = self.train_func(
             copy.deepcopy(self.params), num_iterations, x_train, y_train, self.loss,
             evals_result=self.evals_result, x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
@@ -212,15 +224,11 @@ def train_xgb(
         _loss_func = LGBCustomObjective(loss_func, mode="xgb")
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
-            if isinstance(func_eval, str) and func_eval != "__copy__":
+            if isinstance(func_eval, str):
                 params["eval_metric"].append(func_eval)
             else:
                 if _loss_func_eval is None: _loss_func_eval = []
-                if func_eval == "__copy__":
-                    assert isinstance(loss_func, Loss)
-                    _loss_func_eval.append(LGBCustomEval(loss_func, mode="xgb"))
-                else:
-                    _loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
+                _loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
     if _loss_func_eval is not None:
         if len(_loss_func_eval) > 1: logger.warning(f"xgboost's custom metric is supported only one function. so set this metric: {_loss_func_eval[0]}")
         _loss_func_eval = _loss_func_eval[0]
@@ -329,15 +337,11 @@ def train_lgb(
         _loss_func = LGBCustomObjective(loss_func, mode="lgb")
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
-            if isinstance(func_eval, str) and func_eval != "__copy__":
+            if isinstance(func_eval, str):
                 params["metric"].append(func_eval)
             else:
                 if _loss_func_eval is None: _loss_func_eval = []
-                if func_eval == "__copy__":
-                    assert isinstance(loss_func, Loss)
-                    _loss_func_eval.append(LGBCustomEval(loss_func, mode="lgb", is_higher_better=loss_func.is_higher_better))
-                else:
-                    _loss_func_eval.append(LGBCustomEval(func_eval, mode="lgb", is_higher_better=func_eval.is_higher_better))
+                _loss_func_eval.append(LGBCustomEval(func_eval, mode="lgb", is_higher_better=func_eval.is_higher_better))
     # callbacks
     callbacks = [
         record_evaluation(evals_result),
