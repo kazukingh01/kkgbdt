@@ -113,7 +113,7 @@ class KkGBDT:
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
         logger.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
         output = self.predict_func(input, *args, **kwargs)
-        if self.inference is not None:
+        if hasattr(self, "inference") and self.inference is not None:
             logger.info("extra inference for output...")
             output = self.inference(output)
         if is_softmax is None: is_softmax = self.is_softmax
