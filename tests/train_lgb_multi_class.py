@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.metrics import log_loss
 from kkgbdt.model import KkGBDT
-from kkgbdt.loss import CategoricalCrossEntropyLoss, CrossEntropyLoss
+from kkgbdt.loss import CategoricalCrossEntropyLoss, CrossEntropyLoss, DensitySoftmax
 
 
 if __name__ == "__main__":
@@ -39,3 +39,13 @@ if __name__ == "__main__":
     print(model.predict(valid_x, is_softmax=False))
     print(f"best iteration the model.booster have is: {model.booster.best_iteration}")
     print(CrossEntropyLoss(n_class)(model.predict(valid_x, is_softmax=False, num_iteration=model.booster.best_iteration), valid_y))
+    # Density Softmax
+    train_y = np.random.randint(0, n_class, n_data)
+    valid_y = np.random.randint(0, n_class, n_data)
+    model.fit(
+        train_x, train_y, loss_func=DensitySoftmax(n_class, learning_rate=model.params["learning_rate"]), num_iterations=100,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class)],
+        early_stopping_rounds=None, early_stopping_name=0, 
+        stopping_name=0, stopping_val=3.70, stopping_rounds=5, stopping_is_over=True
+    )
+    print(model.predict(valid_x, is_softmax=False))

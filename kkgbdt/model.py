@@ -66,6 +66,8 @@ class KkGBDT:
         self.evals_result = {}
         self.classes_     = np.arange(num_class, dtype=int)
         self.is_softmax   = is_softmax
+        self.loss         = None
+        self.inference    = None
         if mode == "xgb":
             self.train_func   = train_xgb
             self.predict_func = self.predict_xgb
@@ -90,8 +92,11 @@ class KkGBDT:
         logger.info("START")
         assert loss_func is not None
         assert num_iterations is not None
+        self.loss = loss_func
+        if isinstance(self.loss, Loss) and hasattr(self.loss, "inference"):
+            self.inference = self.loss.inference
         self.booster = self.train_func(
-            copy.deepcopy(self.params), num_iterations, x_train, y_train, loss_func,
+            copy.deepcopy(self.params), num_iterations, x_train, y_train, self.loss,
             evals_result=self.evals_result, x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
             early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
             stopping_name=stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, 
@@ -107,23 +112,24 @@ class KkGBDT:
             self.feature_importances_ = self.booster.feature_importance()
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
         logger.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
-        return self.predict_func(input, *args, is_softmax=is_softmax, **kwargs)
-    def predict_xgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
-        logger.info("START")
-        output = self.booster.predict(DatasetXGB(input), *args, output_margin=True, **kwargs)
+        output = self.predict_func(input, *args, **kwargs)
+        if self.inference is not None:
+            logger.info("extra inference for output...")
+            output = self.inference(output)
         if is_softmax is None: is_softmax = self.is_softmax
         if is_softmax:
             logger.info("softmax output...")
             output = softmax(output)
         logger.info("END")
         return output
+    def predict_xgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
+        logger.info("START")
+        output = self.booster.predict(DatasetXGB(input), *args, output_margin=True, **kwargs)
+        logger.info("END")
+        return output
     def predict_lgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
         logger.info("START")
         output = self.booster.predict(input, *args, **kwargs)
-        if is_softmax is None: is_softmax = self.is_softmax
-        if is_softmax:
-            logger.info("softmax output...")
-            output = softmax(output)
         logger.info("END")
         return output
 
@@ -206,11 +212,15 @@ def train_xgb(
         _loss_func = LGBCustomObjective(loss_func, mode="xgb")
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
-            if isinstance(func_eval, str):
+            if isinstance(func_eval, str) and func_eval != "__copy__":
                 params["eval_metric"].append(func_eval)
             else:
                 if _loss_func_eval is None: _loss_func_eval = []
-                _loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
+                if func_eval == "__copy__":
+                    assert isinstance(loss_func, Loss)
+                    _loss_func_eval.append(LGBCustomEval(loss_func, mode="xgb"))
+                else:
+                    _loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
     if _loss_func_eval is not None:
         if len(_loss_func_eval) > 1: logger.warning(f"xgboost's custom metric is supported only one function. so set this metric: {_loss_func_eval[0]}")
         _loss_func_eval = _loss_func_eval[0]
@@ -319,11 +329,15 @@ def train_lgb(
         _loss_func = LGBCustomObjective(loss_func, mode="lgb")
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
-            if isinstance(func_eval, str):
+            if isinstance(func_eval, str) and func_eval != "__copy__":
                 params["metric"].append(func_eval)
             else:
                 if _loss_func_eval is None: _loss_func_eval = []
-                _loss_func_eval.append(LGBCustomEval(func_eval, mode="lgb", is_higher_better=func_eval.is_higher_better))
+                if func_eval == "__copy__":
+                    assert isinstance(loss_func, Loss)
+                    _loss_func_eval.append(LGBCustomEval(loss_func, mode="lgb", is_higher_better=loss_func.is_higher_better))
+                else:
+                    _loss_func_eval.append(LGBCustomEval(func_eval, mode="lgb", is_higher_better=func_eval.is_higher_better))
     # callbacks
     callbacks = [
         record_evaluation(evals_result),

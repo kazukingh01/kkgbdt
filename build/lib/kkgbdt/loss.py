@@ -4,6 +4,7 @@ from kkgbdt.dataset import DatasetXGB, DatasetLGB
 from kkgbdt.util.numpy import sigmoid, softmax
 from kkgbdt.util.com import check_type_list
 from scipy.misc import derivative
+from scipy.stats import norm
 
 
 __all__ = [
@@ -526,16 +527,21 @@ class CrossEntropyNDCGLoss(Loss):
 
 
 class DensitySoftmax(Loss):
-    def __init__(self, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10):
+    def __init__(self, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10, maxsmpl: int=10000):
         """
         https://arxiv.org/abs/2302.06495
+        https://hackmd.io/4VuiVOA4SfisvylasPdiAA
         """
         assert isinstance(n_classes, int) and n_classes > 2
         assert isinstance(learning_rate, float) and learning_rate > 0.
-        super().__init__("densitysoftmax", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
-        self.lr     = learning_rate
-        self.dx     = dx
-        self.weight = np.random.rand(n_classes, n_classes)
+        assert isinstance(maxsmpl, int) and maxsmpl > 0
+        super().__init__("dence", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
+        self.lr         = learning_rate
+        self.dx         = dx
+        self.weight     = np.random.rand(n_classes, n_classes)
+        self.maxsmpl    = maxsmpl
+        self.mu         = float("nan")
+        self.sigma      = float("nan")
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         assert len(x.shape) == 2
@@ -545,17 +551,50 @@ class DensitySoftmax(Loss):
         x, t = super().convert(x, t)
         t = np.identity(x.shape[1])[t].astype(np.float32)
         return x, t
-    def loss(self, x: np.ndarray, t: np.ndarray):
+    def loss(self, x: np.ndarray, t: np.ndarray, weight: np.ndarray=None):
         x, t = self.convert(x, t)
-        val  = np.einsum("ab,bc->ac", x, self.weight)
-        val  = softmax(val)
-        val  = np.clip(val, self.dx, 1 - self.dx)
-        return (-1 * t * np.log(val)).sum(axis=1)
+        F    = self.classifier(x, weight=weight)
+        return (-1 * t * np.log(F)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
-        grad, hess = calc_grad_hess(x, t, loss_func=self.loss, dx=1e-6)
-        x = softmax(x)
-        x = np.clip(x, self.dx, 1 - self.dx)
-        t_sum = self.conv_t_sum(t)
-        grad  = t_sum * x - t
-        hess  = t_sum * x * (1 - x)
+        x, t = self.convert(x, t)
+        F    = self.classifier(x)
+        # grad, hess for GBDT
+        tsum = t.sum(axis=-1).reshape(-1, 1)
+        grad = F * tsum - t
+        gii  = self.weight[np.identity(x.shape[-1]).astype(bool)].reshape(1, -1)
+        grad = grad * gii
+        hess = F * (1 - F) * tsum
+        hess = hess * (gii ** 2)
+        # grad for weight
+        smpl  = np.random.permutation(x.shape[0])[:min(x.shape[0], self.maxsmpl)]
+        _x    = x[smpl]
+        _t    = t[smpl]
+        _F    = F[smpl]
+        _tsum = tsum[smpl]
+        _grad = np.einsum("ab,bc->bac", _x.T, (_F * _tsum - _t))
+        _grad = _grad.mean(axis=0)
+        self.weight = self.weight - (self.lr * _grad)
+        # calc mu & sigma & norm.pdf
+        self.mu    = np.mean(_x)
+        self.sigma = np.sqrt(np.var(_x))
+        if self.sigma > 1e-5:
+            # on first training, all output is 0 so _p goes to nan. I want to avoid it.
+            _p    = norm.pdf(_x, loc=self.mu, scale=self.sigma) # MLE
+            _p    = _p / _p.max() # scale
+            _E    = _F * _p
+            _grad = np.einsum("ab,bc->bac", _x.T, (_p * (_E * _tsum - _t)))
+            _grad = _grad.mean(axis=0)
+            self.weight = self.weight - (self.lr * _grad)
         return grad, hess
+    def classifier(self, x: np.ndarray, weight: np.ndarray=None):
+        if weight is None: weight = self.weight
+        F = np.einsum("ab,bc->ac", x, weight)
+        F = softmax(F)
+        F = np.clip(F, self.dx, 1 - self.dx)
+        return F
+    def inference(self, x: np.ndarray, *args, **kwargs):
+        _x = np.einsum("ab,bc->ac", x, self.weight)
+        p  = norm.pdf(x, loc=self.mu, scale=self.sigma)
+        p  = p * _x
+        f  = np.exp(p)/np.sum(np.exp(p), axis=1, keepdims=True)
+        return f
