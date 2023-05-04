@@ -549,8 +549,8 @@ class DensitySoftmax(Loss):
         super().__init__("dence", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
         self.lr      = learning_rate
         self.dx      = dx
-        self.weight  = np.random.randn(n_classes, n_classes)
-        self.bias    = np.random.randn(1,         n_classes)
+        self.weight  = np.ones((n_classes, n_classes)) / n_classes
+        self.bias    = np.ones((1,         n_classes)) / n_classes
         self.maxsmpl = maxsmpl
         self.epoch   = epoch
         self.mu      = float("nan")
