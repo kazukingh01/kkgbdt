@@ -599,7 +599,7 @@ class DensitySoftmax(Loss):
         F = np.clip(F, self.dx, 1 - self.dx)
         return F
     def inference(self, x: np.ndarray, *args, **kwargs):
-        _x = np.einsum("ab,bc->ac", x, self.weight)
+        _x = np.einsum("ab,bc->ac", x, self.weight) + self.bias
         p  = norm.pdf(x, loc=self.mu, scale=self.sigma)
         p  = p * _x
         f  = np.exp(p)/np.sum(np.exp(p), axis=1, keepdims=True)
