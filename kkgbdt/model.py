@@ -115,6 +115,10 @@ class KkGBDT:
             stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time,
             sample_weight=sample_weight, categorical_features=categorical_features,
         )
+        # additional prosessing for custom loss
+        if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
+            output = self.predict_func(x_train)
+            self.loss.extra_processing(output, y_train)
         self.set_parameter_after_training()
         logger.info("END")
     def set_parameter_after_training(self):

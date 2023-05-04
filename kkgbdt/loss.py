@@ -72,6 +72,8 @@ class Loss:
         raise NotImplementedError
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         raise NotImplementedError
+    def extra_processing(self, x: np.ndarray, t: np.ndarray):
+        pass
 
 
 class LGBCustomObjective:
@@ -535,7 +537,7 @@ class CrossEntropyNDCGLoss(Loss):
 
 
 class DensitySoftmax(Loss):
-    def __init__(self, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10, maxsmpl: int=10000):
+    def __init__(self, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10, maxsmpl: int=10000, epoch: int=100):
         """
         https://arxiv.org/abs/2302.06495
         https://hackmd.io/4VuiVOA4SfisvylasPdiAA
@@ -543,13 +545,16 @@ class DensitySoftmax(Loss):
         assert isinstance(n_classes, int) and n_classes > 2
         assert isinstance(learning_rate, float) and learning_rate > 0.
         assert isinstance(maxsmpl, int) and maxsmpl > 0
+        assert isinstance(epoch, int) and epoch > 0
         super().__init__("dence", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
-        self.lr         = learning_rate
-        self.dx         = dx
-        self.weight     = np.random.rand(n_classes, n_classes)
-        self.maxsmpl    = maxsmpl
-        self.mu         = float("nan")
-        self.sigma      = float("nan")
+        self.lr      = learning_rate
+        self.dx      = dx
+        self.weight  = np.random.rand(n_classes, n_classes)
+        self.bias    = np.random.rand(1,         n_classes)
+        self.maxsmpl = maxsmpl
+        self.epoch   = epoch
+        self.mu      = float("nan")
+        self.sigma   = float("nan")
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         assert len(x.shape) == 2
@@ -566,8 +571,8 @@ class DensitySoftmax(Loss):
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         F    = self.classifier(x)
-        # grad, hess for GBDT
         tsum = t.sum(axis=-1).reshape(-1, 1)
+        # grad, hess for GBDT
         grad = F * tsum - t
         gii  = self.weight[np.identity(x.shape[-1]).astype(bool)].reshape(1, -1)
         grad = grad * gii
@@ -582,21 +587,14 @@ class DensitySoftmax(Loss):
         _grad = np.einsum("ab,bc->bac", _x.T, (_F * _tsum - _t))
         _grad = _grad.mean(axis=0)
         self.weight = self.weight - (self.lr * _grad)
-        # calc mu & sigma & norm.pdf
-        self.mu    = np.mean(_x)
-        self.sigma = np.sqrt(np.var(_x))
-        if self.sigma > 1e-5:
-            # on first training, all output is 0 so _p goes to nan. I want to avoid it.
-            _p    = norm.pdf(_x, loc=self.mu, scale=self.sigma) # MLE
-            _p    = _p / _p.max() # scale
-            _E    = _F * _p
-            _grad = np.einsum("ab,bc->bac", _x.T, (_p * (_E * _tsum - _t)))
-            _grad = _grad.mean(axis=0)
-            self.weight = self.weight - (self.lr * _grad)
+        _grad = (_F * _tsum - _t) * self.bias
+        _grad = _grad.mean(axis=0).reshape(1, -1)
+        self.bias   = self.bias - (self.lr * _grad)
         return grad, hess
     def classifier(self, x: np.ndarray, weight: np.ndarray=None):
         if weight is None: weight = self.weight
         F = np.einsum("ab,bc->ac", x, weight)
+        F = F + self.bias
         F = softmax(F)
         F = np.clip(F, self.dx, 1 - self.dx)
         return F
@@ -606,3 +604,31 @@ class DensitySoftmax(Loss):
         p  = p * _x
         f  = np.exp(p)/np.sum(np.exp(p), axis=1, keepdims=True)
         return f
+    def extra_processing(self, x: np.ndarray, t: np.ndarray):
+        # calc mu & sigma & norm.pdf ( this is first )
+        x, t = self.convert(x, t)
+        F    = self.classifier(x)
+        tsum = t.sum(axis=-1).reshape(-1, 1)
+        self.mu    = np.mean(x)
+        self.sigma = np.sqrt(np.var(x))
+        for i_epoch in range(self.epoch):
+            smpl  = np.random.permutation(x.shape[0])[:min(x.shape[0], self.maxsmpl)]
+            _x    = x[smpl]
+            _t    = t[smpl]
+            _F    = F[smpl]
+            _tsum = tsum[smpl]
+            if self.sigma > 1e-5:
+                # on first training, all output is 0 so _p goes to nan. I want to avoid it.
+                _p    = norm.pdf(_x, loc=self.mu, scale=self.sigma) # MLE
+                _p    = _p / _p.max() # scale
+                _E    = _F * _p
+                _grad = np.einsum("ab,bc->bac", _x.T, (_p * (_E * _tsum - _t)))
+                _grad = _grad.mean(axis=0)
+                self.weight = self.weight - (self.lr * _grad)
+                _grad = (_p * (_E * _tsum - _t)) * self.bias
+                _grad = _grad.mean(axis=0).reshape(1, -1)
+                self.bias   = self.bias - (self.lr * _grad)
+            F    = self.classifier(x)
+            loss = (-1 * t * np.log(F)).sum(axis=1)
+            loss = self.reduction(loss)
+            print(f"epoch: {i_epoch}, loss: {loss}")
