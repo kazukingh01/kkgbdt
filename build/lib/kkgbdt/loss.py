@@ -1,4 +1,6 @@
 import numpy as np
+import torch
+import jax
 from typing import List
 from functools import partial
 from kkgbdt.dataset import DatasetXGB, DatasetLGB
@@ -537,11 +539,12 @@ class CrossEntropyNDCGLoss(Loss):
 
 
 class DensitySoftmax(Loss):
-    def __init__(self, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10, maxsmpl: int=10000, epoch: int=100):
+    def __init__(self, n_input: int, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10, maxsmpl: int=10000, epoch: int=100):
         """
         https://arxiv.org/abs/2302.06495
         https://hackmd.io/4VuiVOA4SfisvylasPdiAA
         """
+        assert isinstance(n_input,   int) and n_input   > 2
         assert isinstance(n_classes, int) and n_classes > 2
         assert isinstance(learning_rate, float) and learning_rate > 0.
         assert isinstance(maxsmpl, int) and maxsmpl > 0
@@ -549,8 +552,8 @@ class DensitySoftmax(Loss):
         super().__init__("dence", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
         self.lr      = learning_rate
         self.dx      = dx
-        self.weight  = np.ones((n_classes, n_classes)) / n_classes
-        self.bias    = np.ones((1,         n_classes)) / n_classes
+        self.weight  = np.random.rand(n_input, n_classes)
+        self.bias    = np.random.rand(1,       n_classes)
         self.maxsmpl = maxsmpl
         self.epoch   = epoch
         self.mu      = float("nan")
@@ -564,20 +567,58 @@ class DensitySoftmax(Loss):
         x, t = super().convert(x, t)
         t = np.identity(x.shape[1])[t].astype(np.float32)
         return x, t
-    def loss(self, x: np.ndarray, t: np.ndarray, weight: np.ndarray=None):
+        return grad, hess
+    def classifier(self, x: np.ndarray):
+        F = np.einsum("ab,bc->ac", x, self.weight)
+        F = F + self.bias
+        F = softmax(F)
+        F = np.clip(F, self.dx, 1 - self.dx)
+        return F
+    def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
-        F    = self.classifier(x, weight=weight)
+        F    = self.classifier(x)
         return (-1 * t * np.log(F)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
+        """
+        command to compare to pytorch::
+            # gradient for x
+            x = torch.rand(1, 4, requires_grad=True)
+            t = torch.randint(0, 3, (1,)).to(torch.long)
+            t = torch.eye(3)[t]
+            weight = torch.nn.Linear(4, 3)
+            def _func(x, t=None): return torch.nn.CrossEntropyLoss(reduction="sum")(weight(x), t)
+
+            func = partial(_func, t=t)
+            loss = func(x)
+            grad = torch.autograd.grad(loss, x, create_graph=True)[0]
+            print(grad)
+            t_sum = t.sum(dim=-1).reshape(-1, 1)
+            F = weight(x)
+            F = torch.softmax(F, dim=-1)
+            _grad = torch.einsum("ab,bc->ac", t_sum * F - t, weight.weight)
+            print(_grad)
+            # hessian for x 
+            hess = torch.autograd.functional.hessian(func, x)
+            print(hess)
+            _hess = t_sum * (torch.einsum("ab,bc->ac", F, weight.weight ** 2) - ((torch.einsum("ab,bc->ac", F, weight.weight)) ** 2))
+            print(_hess)
+            # gradient for weight
+            gradw = torch.autograd.grad(loss, weight.weight, create_graph=True)[0]
+            print(gradw)
+            _gradw = torch.einsum("ab,ac->abc", x, F * t_sum - t).T
+            print(_gradw)
+            # gradient for bias
+            gradb = torch.autograd.grad(loss, weight.bias, create_graph=True)[0]
+            print(gradb)
+            _gradb = F * t_sum - t
+            print(_gradb)
+        """
         x, t = self.convert(x, t)
         F    = self.classifier(x)
         tsum = t.sum(axis=-1).reshape(-1, 1)
         # grad, hess for GBDT
-        grad = F * tsum - t
-        gii  = self.weight[np.identity(x.shape[-1]).astype(bool)].reshape(1, -1)
-        grad = grad * gii
-        hess = F * (1 - F) * tsum
-        hess = hess * (gii ** 2)
+        grad = np.einsum("ab,bc->ac", F * tsum - t, self.weight.T)
+        hess = tsum * (np.einsum("ab,bc->ac", F, self.weight.T ** 2) - (np.einsum("ab,bc->ac", F, self.weight.T) ** 2))
         # grad for weight
         smpl  = np.random.permutation(x.shape[0])[:min(x.shape[0], self.maxsmpl)]
         _x    = x[smpl]
@@ -587,31 +628,26 @@ class DensitySoftmax(Loss):
         _grad = np.einsum("ab,bc->bac", _x.T, (_F * _tsum - _t))
         _grad = _grad.mean(axis=0)
         self.weight = self.weight - (self.lr * _grad)
-        _grad = (_F * _tsum - _t) * self.bias
+        _grad = (_F * _tsum - _t)
         _grad = _grad.mean(axis=0).reshape(1, -1)
-        self.bias   = self.bias - (self.lr * _grad)
+        self.bias = self.bias - (self.lr * _grad)
         return grad, hess
-    def classifier(self, x: np.ndarray, weight: np.ndarray=None):
-        if weight is None: weight = self.weight
-        F = np.einsum("ab,bc->ac", x, weight)
-        F = F + self.bias
-        F = softmax(F)
-        F = np.clip(F, self.dx, 1 - self.dx)
-        return F
     def inference(self, x: np.ndarray, *args, **kwargs):
         _x = np.einsum("ab,bc->ac", x, self.weight) + self.bias
         p  = norm.pdf(x, loc=self.mu, scale=self.sigma)
         p  = p * _x
         f  = np.exp(p)/np.sum(np.exp(p), axis=1, keepdims=True)
         return f
-    def extra_processing(self, x: np.ndarray, t: np.ndarray):
+    def extra_processing(self, x: np.ndarray, t: np.ndarray, epoch: int=None):
+        if epoch is None: epoch = self.epoch
+        assert isinstance(epoch, int)
         # calc mu & sigma & norm.pdf ( this is first )
         x, t = self.convert(x, t)
         F    = self.classifier(x)
         tsum = t.sum(axis=-1).reshape(-1, 1)
         self.mu    = np.mean(x)
         self.sigma = np.sqrt(np.var(x))
-        for i_epoch in range(self.epoch):
+        for i_epoch in range(epoch):
             smpl  = np.random.permutation(x.shape[0])[:min(x.shape[0], self.maxsmpl)]
             _x    = x[smpl]
             _t    = t[smpl]
@@ -622,12 +658,12 @@ class DensitySoftmax(Loss):
                 _p    = norm.pdf(_x, loc=self.mu, scale=self.sigma) # MLE
                 _p    = _p / _p.max() # scale
                 _E    = _F * _p
-                _grad = np.einsum("ab,bc->bac", _x.T, (_p * (_E * _tsum - _t)))
+                _grad = np.einsum("ab,bc->bac", _x.T, _p * (_E * _tsum - _t))
                 _grad = _grad.mean(axis=0)
                 self.weight = self.weight - (self.lr * _grad)
-                _grad = (_p * (_E * _tsum - _t)) * self.bias
+                _grad = _p * (_E * _tsum - _t)
                 _grad = _grad.mean(axis=0).reshape(1, -1)
-                self.bias   = self.bias - (self.lr * _grad)
+                self.bias = self.bias - (self.lr * _grad)
             F    = self.classifier(x)
             loss = (-1 * t * np.log(F)).sum(axis=1)
             loss = self.reduction(loss)

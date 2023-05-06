@@ -43,7 +43,7 @@ if __name__ == "__main__":
     train_y = np.random.randint(0, n_class, n_data)
     valid_y = np.random.randint(0, n_class, n_data)
     model.fit(
-        train_x, train_y, loss_func=DensitySoftmax(n_class, learning_rate=model.params["learning_rate"]), num_iterations=100,
+        train_x, train_y, loss_func=DensitySoftmax(n_class, n_class, learning_rate=1.0), num_iterations=100,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class)],
         early_stopping_rounds=None, early_stopping_name=0, 
         stopping_name=0, stopping_val=3.70, stopping_rounds=5, stopping_is_over=True
