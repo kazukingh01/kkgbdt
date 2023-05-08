@@ -541,6 +541,8 @@ class DensitySoftmax(Loss):
         """
         https://arxiv.org/abs/2302.06495
         https://hackmd.io/4VuiVOA4SfisvylasPdiAA
+        I couldn't find out formular of Probability Density Function
+            p(z_t, a) * z_t^T theta_i (It doesn't match dimentions)
         """
         assert isinstance(n_input,   int) and n_input   > 2
         assert isinstance(n_classes, int) and n_classes > 2
@@ -645,16 +647,17 @@ class DensitySoftmax(Loss):
         tsum = t.sum(axis=-1).reshape(-1, 1)
         self.mu    = np.mean(x)
         self.sigma = np.sqrt(np.var(x))
+        p          = norm.pdf(x, loc=self.mu, scale=self.sigma) # MLE
+        p          = p / p.max() # scale
         for i_epoch in range(epoch):
             smpl  = np.random.permutation(x.shape[0])[:min(x.shape[0], self.maxsmpl)]
             _x    = x[smpl]
             _t    = t[smpl]
             _F    = F[smpl]
+            _p    = p[smpl]
             _tsum = tsum[smpl]
             if self.sigma > 1e-5:
                 # on first training, all output is 0 so _p goes to nan. I want to avoid it.
-                _p    = norm.pdf(_x, loc=self.mu, scale=self.sigma) # MLE
-                _p    = _p / _p.max() # scale
                 _E    = _F * _p
                 _grad = np.einsum("ab,bc->bac", _x.T, _p * (_E * _tsum - _t))
                 _grad = _grad.mean(axis=0)
