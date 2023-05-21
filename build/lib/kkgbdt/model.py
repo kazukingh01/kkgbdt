@@ -51,7 +51,7 @@ class KkGBDT:
         assert check_type(reg_alpha,  [float, int]) and reg_alpha >= 0
         assert check_type(reg_lambda, [float, int]) and reg_alpha >= 0
         assert check_type(min_split_gain, [float, int]) and min_split_gain >= 0
-        assert isinstance(max_bin, int) and max_bin > 10
+        assert isinstance(max_bin, int) and max_bin >= 4
         assert isinstance(min_data_in_bin, int) and min_data_in_bin > 1
         self.booster = None
         self.mode    = mode
