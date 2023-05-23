@@ -265,7 +265,7 @@ class CrossEntropyLossArgmax(Loss):
 
 class CategoricalCrossEntropyLoss(CrossEntropyLoss):
     def __init__(self, n_classes: int, dx: float=1e-10, smoothing: float=False):
-        assert (isinstance(smoothing, bool) and smoothing == False) or (isinstance(smoothing, float) and 0.0 < smoothing < 1.0)
+        assert (isinstance(smoothing, bool) and smoothing == False) or (isinstance(smoothing, float) and 0.0 <= smoothing < 1.0)
         super().__init__(n_classes, dx=dx, target_dtype=np.int32)
         self.smoothing = smoothing
         self.name      = f"cce(smooth{round(self.smoothing, 2)})" if self.smoothing > 0.0 else "cce"
