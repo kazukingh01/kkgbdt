@@ -8,6 +8,7 @@ from lightgbm.callback import record_evaluation
 from typing import Union, List
 from kkgbdt.loss import Loss, LGBCustomObjective, LGBCustomEval
 from kkgbdt.dataset import DatasetXGB, DatasetLGB
+from kkgbdt.trace import KkTracer
 from kkgbdt.callbacks import PrintEvalation, TrainStopping, print_evaluation, callback_stop_training, callback_best_iter
 from kkgbdt.util.numpy import softmax
 from kkgbdt.util.com import check_type, check_type_list
@@ -115,6 +116,7 @@ class KkGBDT:
             stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time,
             sample_weight=sample_weight, categorical_features=categorical_features,
         )
+        if self.mode == "lgb": self.booster.__class__ = KkTracer
         # additional prosessing for custom loss
         if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
             output = self.predict_func(x_train)

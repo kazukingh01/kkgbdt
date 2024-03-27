@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='kkgbdt',
-    version='1.1.0',
+    version='1.2.0',
     description='my object detection library.',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -25,9 +25,9 @@ setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        "xgboost==1.7.4",
-        "lightgbm==3.3.5",
-        "optuna==3.1.0",
+        "xgboost==2.0.3",
+        "lightgbm==4.3.0",
+        "optuna==3.6.0",
     ],
-    python_requires='>=3.11.2'
+    python_requires='>=3.12.2'
 )
