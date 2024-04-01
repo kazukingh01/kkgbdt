@@ -10,8 +10,8 @@ with open("README.md", "r") as fh:
 
 setup(
     name='kkgbdt',
-    version='1.2.0',
-    description='my object detection library.',
+    version='1.2.1',
+    description='my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM and XGBoost.',
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/kazukingh01/kkgbdt",
@@ -25,9 +25,13 @@ setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
+        'pandas==2.2.1',
+        'numpy==1.26.4',
         "xgboost==2.0.3",
         "lightgbm==4.3.0",
         "optuna==3.6.0",
+        'setuptools>=62.0.0',
+        'wheel>=0.37.0',
     ],
     python_requires='>=3.12.2'
 )

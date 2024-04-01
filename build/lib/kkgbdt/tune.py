@@ -1,5 +1,4 @@
 import copy
-from typing import List, Union
 import numpy as np
 from kkgbdt.model import KkGBDT
 from kkgbdt.loss import Loss
@@ -14,11 +13,11 @@ __all__ = [
 
 def tune_parameter(
     trial, mode: str="xgb", num_class: int=None, n_jobs: int=1, eval_string: str=None,
-    x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: Union[str, Loss]=None, num_iterations: int=None,
-    x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None,
-    loss_func_eval: Union[str, Loss]=None, early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
+    x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: str | Loss=None, num_iterations: int=None,
+    x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
+    loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
-    sample_weight: Union[str, np.ndarray]=None, categorical_features: List[int]=None,
+    sample_weight: str | np.ndarray=None, categorical_features: list[int]=None,
     params_const = {
         "learning_rate"    : 0.03,
         "num_leaves"       : 100,

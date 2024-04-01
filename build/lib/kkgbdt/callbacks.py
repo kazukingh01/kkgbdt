@@ -1,7 +1,7 @@
 import time
 from typing import List, Union
 from xgboost.callback import TrainingCallback
-from lightgbm.callback import EarlyStopException, _format_eval_result
+from lightgbm.callback import EarlyStopException, _format_eval_result, _LogEvaluationCallback, CallbackEnv
 from kkgbdt.util.com import check_type
 from kkgbdt.util.logger import set_logger
 logger = set_logger(__name__)
@@ -12,7 +12,7 @@ __all__ = [
     "TrainStopping",
     "callback_stop_training",
     "callback_best_iter",
-    "print_evaluation"
+    "log_evaluation"
 ]
 
 
@@ -115,10 +115,13 @@ def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, i
     return _callback
 
 
-def print_evaluation(period=1, show_stdv=True):
-    def _callback(env):
-        if period > 0 and env.evaluation_result_list and (env.iteration + 1) % period == 0:
-            result = '\t'.join([_format_eval_result(x, show_stdv) for x in env.evaluation_result_list])
+class _KkLogEvaluationCallback(_LogEvaluationCallback):
+    def __call__(self, env: CallbackEnv) -> None:
+        if self.period > 0 and env.evaluation_result_list and (env.iteration + 1) % self.period == 0:
+            result = '\t'.join([_format_eval_result(x, self.show_stdv) for x in env.evaluation_result_list])
             logger.info('[%d]\t%s' % (env.iteration, result))
-    _callback.order = 10
-    return _callback
+
+
+def log_evaluation(period: int = 1, show_stdv: bool = True) -> _KkLogEvaluationCallback:
+    return _KkLogEvaluationCallback(period=period, show_stdv=show_stdv)
+

@@ -1,15 +1,14 @@
-import copy
+import copy, time
 import numpy as np
 from sklearn.utils.class_weight import compute_sample_weight
 import xgboost as xgb
 import lightgbm as lgb
 from xgboost.callback import EarlyStopping
 from lightgbm.callback import record_evaluation
-from typing import Union, List
 from kkgbdt.loss import Loss, LGBCustomObjective, LGBCustomEval
-from kkgbdt.dataset import DatasetXGB, DatasetLGB
+from kkgbdt.dataset import DatasetLGB
 from kkgbdt.trace import KkTracer
-from kkgbdt.callbacks import PrintEvalation, TrainStopping, print_evaluation, callback_stop_training, callback_best_iter
+from kkgbdt.callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
 from kkgbdt.util.numpy import softmax
 from kkgbdt.util.com import check_type, check_type_list
 from kkgbdt.util.logger import set_logger
@@ -27,41 +26,24 @@ __all__ = [
 class KkGBDT:
     def __init__(
         self, num_class: int, mode: str="xgb", is_softmax: bool=False, 
-        learning_rate: float=0.1, num_leaves: int=100, n_jobs: int=1, is_gpu: bool=False, 
-        random_seed: int=0, max_depth: int=0, min_child_samples: int=20, min_child_weight: float=1e-3,
+        learning_rate: float=0.1, num_leaves: int=100, n_jobs: int=-1, is_gpu: bool=False, 
+        random_seed: int=0, max_depth: int=-1, min_child_samples: int=20, min_child_weight: float=1e-3,
         subsample: float=1, colsample_bytree: float=0.5, colsample_bylevel: float=1, colsample_bynode: float=1,
-        reg_alpha: float=0, reg_lambda: float=0, min_split_gain: float=0,
-        max_bin: int=256, min_data_in_bin: int=5, **kwargs
+        reg_alpha: float=0, reg_lambda: float=0, min_split_gain: float=0, max_bin: int=256, 
+        min_data_in_bin: int=5, multi_strategy: str=None, verbosity: None | int=None, **kwargs
     ):
         logger.info("START")
-        assert isinstance(num_class, int) and num_class > 0
         assert isinstance(mode, str) and mode in ["xgb", "lgb"]
         assert isinstance(is_softmax, bool)
-        assert isinstance(learning_rate, float) and learning_rate >= 1e-5 and learning_rate <= 1
-        assert isinstance(num_leaves, int) and num_leaves > 0
-        assert isinstance(n_jobs, int) and n_jobs > 0
-        assert isinstance(is_gpu, bool)
-        assert isinstance(random_seed, int) and random_seed >= 0
-        assert isinstance(max_depth, int) and max_depth >= 0
-        assert isinstance(min_child_samples, int) and min_child_samples > 0
-        assert check_type(min_child_weight, [float, int]) and min_child_weight >= 1e-5
-        assert check_type(subsample, [float, int]) and subsample > 0 and subsample <= 1
-        assert check_type(colsample_bytree,  [float, int]) and colsample_bytree  > 0 and colsample_bytree  <= 1
-        assert check_type(colsample_bylevel, [float, int]) and colsample_bylevel > 0 and colsample_bylevel <= 1
-        assert check_type(colsample_bynode,  [float, int]) and colsample_bynode  > 0 and colsample_bynode  <= 1
-        assert check_type(reg_alpha,  [float, int]) and reg_alpha >= 0
-        assert check_type(reg_lambda, [float, int]) and reg_alpha >= 0
-        assert check_type(min_split_gain, [float, int]) and min_split_gain >= 0
-        assert isinstance(max_bin, int) and max_bin >= 4
-        assert isinstance(min_data_in_bin, int) and min_data_in_bin > 1
         self.booster = None
         self.mode    = mode
-        self.params  = alias_parameter(
+        self.params  = alias_parameters(
             mode=self.mode, num_class=num_class, learning_rate=learning_rate, num_leaves=num_leaves, n_jobs=n_jobs, is_gpu=is_gpu, 
             random_seed=random_seed, max_depth=max_depth, min_child_samples=min_child_samples, min_child_weight=min_child_weight,
             subsample=subsample, colsample_bytree=colsample_bytree, colsample_bylevel=colsample_bylevel,
             colsample_bynode=colsample_bynode, reg_alpha=reg_alpha, reg_lambda=reg_lambda, 
-            min_split_gain=min_split_gain, max_bin=max_bin, min_data_in_bin=min_data_in_bin
+            min_split_gain=min_split_gain, max_bin=max_bin, min_data_in_bin=min_data_in_bin, 
+            multi_strategy=multi_strategy, verbosity=verbosity
         )
         self.params.update(copy.deepcopy(kwargs))
         self.evals_result = {}
@@ -84,11 +66,11 @@ class KkGBDT:
                 setattr(instance.booster, x, copy.deepcopy(getattr(self.booster, x)))
         return instance
     def fit(
-        self, x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss]=None, num_iterations: int=None,
-        x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None,
-        loss_func_eval: Union[str, Loss]=None, early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
+        self, x_train: np.ndarray, y_train: np.ndarray, loss_func: str | Loss=None, num_iterations: int=None,
+        x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
+        loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
         stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
-        sample_weight: Union[str, np.ndarray]=None, categorical_features: List[int]=None
+        sample_weight: str | np.ndarray=None, categorical_features: list[int]=None
     ):
         logger.info("START")
         assert loss_func is not None
@@ -108,6 +90,7 @@ class KkGBDT:
                     _loss_func_eval.append(func_eval)
             loss_func_eval = _loss_func_eval
         # training
+        time_start = time.time()
         self.booster = self.train_func(
             copy.deepcopy(self.params), num_iterations, x_train, y_train, self.loss,
             evals_result=self.evals_result, x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
@@ -116,12 +99,14 @@ class KkGBDT:
             stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time,
             sample_weight=sample_weight, categorical_features=categorical_features,
         )
+        self.time_train = time.time() - time_start
         if self.mode == "lgb": self.booster.__class__ = KkTracer
         # additional prosessing for custom loss
         if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
             output = self.predict_func(x_train)
             self.loss.extra_processing(output, y_train)
         self.set_parameter_after_training()
+        logger.info(f"Time: {self.time_train} s.")
         logger.info("END")
     def set_parameter_after_training(self):
         if self.mode == "xgb":
@@ -142,7 +127,7 @@ class KkGBDT:
         return output
     def predict_xgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
         logger.info("START")
-        output = self.booster.predict(DatasetXGB(input), *args, output_margin=True, **kwargs)
+        output = self.booster.predict(xgb.DMatrix(input), *args, output_margin=True, **kwargs)
         logger.info("END")
         return output
     def predict_lgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
@@ -156,14 +141,14 @@ def train_xgb(
     # fitting parameter
     params: dict, num_iterations: int,
     # training data & loss
-    x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss], evals_result: dict={}, 
+    x_train: np.ndarray, y_train: np.ndarray, loss_func: str | Loss, evals_result: dict={}, 
     # validation data & loss
-    x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None, loss_func_eval: Union[str, Loss]=None,
+    x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None, loss_func_eval: str | Loss=None,
     # early stopping parameter
-    early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
+    early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
     # option
-    sample_weight: Union[str, np.ndarray]=None, categorical_features: List[int]=None
+    sample_weight: str | np.ndarray=None, categorical_features: list[int]=None
 ):
     """
     Params::
@@ -216,11 +201,20 @@ def train_xgb(
             enable_categorical   = True
         else:
             categorical_features = None
+    # multi strategy
+    if params.get("multi_strategy") is not None and params["multi_strategy"] == "multi_output_tree":
+        # see: https://xgboost.readthedocs.io/en/stable/python/examples/multioutput_regression.html#sphx-glr-python-examples-multioutput-regression-py
+        assert len(y_train.shape) == 2
+        params["num_target"] = y_train.shape[-1]
+        if params["num_class"] != 1:
+            logger.raise_error(f"You cannot use multi class and multi_strategy at the same time. num_class: {params['num_class']}, num_target: {params['num_target']}")
+    else:
+        if len(y_train.shape) != 1:
+            logger.warning("XGBoost basically doesn't support multi task. You should use multi_output_tree.")
+        assert len(y_train.shape) == 1
     # set dataset
-    dataset_train = DatasetXGB(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
-    dataset_valid = [(dataset_train, "train")] + [
-        (DatasetXGB(_x_valid, label=_y_valid), f"valid_{i_valid}") for i_valid, (_x_valid, _y_valid) in enumerate(zip(x_valid, y_valid))
-    ]
+    dataset_train = xgb.DMatrix(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
+    dataset_valid = [(dataset_train, "train")] + [(xgb.DMatrix(_x_valid, label=_y_valid), f"valid_{i_valid}") for i_valid, (_x_valid, _y_valid) in enumerate(zip(x_valid, y_valid))]
     # loss setting
     _loss_func, _loss_func_eval = None, None
     params["eval_metric"] = []
@@ -260,6 +254,7 @@ def train_xgb(
             TrainStopping(stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time)
         )
     # train
+    logger.info(f"params: {params}")
     model = xgb.train(
         params, dataset_train, 
         num_boost_round=num_iterations, evals=dataset_valid, obj=_loss_func,
@@ -275,14 +270,14 @@ def train_lgb(
     # fitting parameter
     params: dict, num_iterations: int,
     # training data & loss
-    x_train: np.ndarray, y_train: np.ndarray, loss_func: Union[str, Loss], evals_result: dict={}, 
+    x_train: np.ndarray, y_train: np.ndarray, loss_func: str | Loss, evals_result: dict={}, 
     # validation data & loss
-    x_valid: Union[np.ndarray, List[np.ndarray]]=None, y_valid: Union[np.ndarray, List[np.ndarray]]=None, loss_func_eval: Union[str, Loss]=None,
+    x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None, loss_func_eval: str | Loss | list[str | Loss]=None,
     # early stopping parameter
-    early_stopping_rounds: int=None, early_stopping_name: Union[int, str]=None,
+    early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     stopping_name:str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
     # option
-    sample_weight: Union[str, np.ndarray]=None, categorical_features: List[int]=None
+    sample_weight: str | np.ndarray=None, categorical_features: list[int]=None
 ):
     """
     Params::
@@ -316,7 +311,6 @@ def train_lgb(
     if params.get("objective") is not None: logger.raise_error(f"please set 'objective' parameter to 'loss_func'.")
     if params.get("metric")    is not None: logger.raise_error(f"please set 'metric'    parameter to 'loss_func_eval'.")
     params["num_iterations"] = num_iterations
-    params["verbosity"]      = -1
     # dataset option
     if sample_weight is not None:
         assert isinstance(sample_weight, str) or isinstance(sample_weight, np.ndarray)
@@ -332,15 +326,15 @@ def train_lgb(
     else:
         categorical_features = "auto"
     # set dataset
-    dataset_train = DatasetLGB(x_train, label=y_train, weight=sample_weight, categorical_feature=categorical_features)
-    dataset_valid = [dataset_train] + [DatasetLGB(_x_valid, label=_y_valid) for _x_valid, _y_valid in zip(x_valid, y_valid)]
+    dataset_train = DatasetLGB(x_train, label=y_train, weight=sample_weight, categorical_feature=categorical_features, params={"verbosity": params["verbosity"]})
+    dataset_valid = [dataset_train] + [DatasetLGB(_x_valid, label=_y_valid, params={"verbosity": params["verbosity"]}) for _x_valid, _y_valid in zip(x_valid, y_valid)]
     # loss setting
-    _loss_func, _loss_func_eval = None, None
+    _loss_func_eval = None
     params["metric"] = []
     if isinstance(loss_func, str):
         params["objective"] = loss_func
     else:
-        _loss_func = LGBCustomObjective(loss_func, mode="lgb")
+        params["objective"] = LGBCustomObjective(loss_func, mode="lgb")
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
             if isinstance(func_eval, str):
@@ -348,10 +342,15 @@ def train_lgb(
             else:
                 if _loss_func_eval is None: _loss_func_eval = []
                 _loss_func_eval.append(LGBCustomEval(func_eval, mode="lgb", is_higher_better=func_eval.is_higher_better))
+    else:
+        if isinstance(loss_func, str):
+            _loss_func_eval = [loss_func, ]
+        else:
+            _loss_func_eval = [LGBCustomEval(loss_func, mode="lgb", is_higher_better=loss_func.is_higher_better), ]
     # callbacks
     callbacks = [
         record_evaluation(evals_result),
-        print_evaluation(),
+        log_evaluation(),
     ]
     ## early stopping
     dict_train, dict_eval_best = {}, {}
@@ -383,8 +382,9 @@ def train_lgb(
             callback_stop_training(dict_train, stopping_val, stopping_rounds, stopping_is_over, stopping_train_time)
         )
     # train
+    logger.info(f"params: {params}")
     model = lgb.train(
-        params, dataset_train, fobj=_loss_func,
+        params, dataset_train,
         valid_sets=dataset_valid, valid_names=["train"]+[f"valid_{i}" for i in range(len(dataset_valid)-1)],
         feval=_loss_func_eval, callbacks=callbacks
     )
@@ -392,16 +392,36 @@ def train_lgb(
     return model
 
 
-def alias_parameter(
+def alias_parameters(
     mode: str="xgb",
     num_class: int=None, learning_rate: float=None, num_leaves: int=None, n_jobs: int=None, is_gpu: bool=None, 
     random_seed: int=0, max_depth: int=None, min_child_samples: int=None, min_child_weight: float=None,
     subsample: float=None, colsample_bytree: float=None, colsample_bylevel: float=None,
-    colsample_bynode: float=None, reg_alpha: float=None, reg_lambda: float=None, 
-    min_split_gain: float=None, max_bin: int=None, min_data_in_bin: int=None, 
+    colsample_bynode: float=None, reg_alpha: float=None, reg_lambda: float=None, min_split_gain: float=None, 
+    max_bin: int=None, min_data_in_bin: int=None, multi_strategy: str=None, verbosity: int=None,
 ):
     logger.info(f"START. mode={mode}")
     assert isinstance(mode, str) and mode in ["xgb", "lgb"]
+    assert isinstance(num_class, int) and num_class > 0
+    assert isinstance(learning_rate, float) and learning_rate >= 1e-5 and learning_rate <= 1
+    assert isinstance(num_leaves, int) and num_leaves > 0
+    assert isinstance(n_jobs, int) and (n_jobs > 0 or n_jobs == -1)
+    assert isinstance(is_gpu, bool)
+    assert isinstance(random_seed, int) and random_seed >= 0
+    assert isinstance(max_depth, int) and max_depth >= -1
+    assert isinstance(min_child_samples, int) and min_child_samples > 0
+    assert check_type(min_child_weight, [float, int]) and min_child_weight >= 1e-5
+    assert check_type(subsample, [float, int]) and subsample > 0 and subsample <= 1
+    assert check_type(colsample_bytree,  [float, int]) and colsample_bytree  > 0 and colsample_bytree  <= 1
+    assert check_type(colsample_bylevel, [float, int]) and colsample_bylevel > 0 and colsample_bylevel <= 1
+    assert check_type(colsample_bynode,  [float, int]) and colsample_bynode  > 0 and colsample_bynode  <= 1
+    assert check_type(reg_alpha,  [float, int]) and reg_alpha >= 0
+    assert check_type(reg_lambda, [float, int]) and reg_alpha >= 0
+    assert check_type(min_split_gain, [float, int]) and min_split_gain >= 0
+    assert isinstance(max_bin, int) and max_bin >= 4
+    assert isinstance(min_data_in_bin, int) and min_data_in_bin >= 1
+    assert multi_strategy is None or multi_strategy in ["one_output_per_tree", "multi_output_tree"]
+    assert verbosity is None or isinstance(verbosity, int)
     params = {}
     if mode == "xgb":
         params["num_class"]   = num_class
@@ -410,7 +430,7 @@ def alias_parameter(
         params["nthread"]     = n_jobs
         params["tree_method"] = "hist" if is_gpu is None or is_gpu == False else "gpu_hist"
         params["seed"]        = random_seed
-        params["max_depth"]   = max_depth
+        params["max_depth"]   = 0 if max_depth <= 0 else max_depth
         # min_child_samples is not in configlation
         params["min_child_weight"]  = min_child_weight
         params["subsample"]         = subsample
@@ -421,6 +441,10 @@ def alias_parameter(
         params["lambda"]            = reg_lambda
         params["gamma"]             = min_split_gain # Maybe different from xgb and lgb
         params["max_bin"]           = max_bin
+        params["verbosity"]         = 0 if verbosity is None else verbosity
+        params["tree_method"]       = "hist"
+        params["grow_policy"]       = "depthwise"
+        params["multi_strategy"]    = "one_output_per_tree" if multi_strategy is None else multi_strategy
         # min_data_in_bin is not in configlation
         for x in ["min_child_weight", "min_data_in_bin"]:
             if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
@@ -434,7 +458,7 @@ def alias_parameter(
             params["gpu_platform_id"]     = 0
             params["gpu_device_id"]       = 0
         params["seed"]                    = random_seed
-        params["max_depth"]               = max_depth
+        params["max_depth"]               = -1 if max_depth <= 0 else max_depth
         params["min_data_in_leaf"]        = min_child_samples
         params["min_sum_hessian_in_leaf"] = min_child_weight
         params["bagging_fraction"]        = subsample
@@ -448,7 +472,8 @@ def alias_parameter(
         params["min_gain_to_split"]       = min_split_gain
         params["max_bin"]                 = max_bin - 1
         params["min_data_in_bin"]         = min_data_in_bin
-        for x in ["colsample_bylevel"]:
+        params["verbosity"]               = -1 if verbosity is None else verbosity
+        for x in ["colsample_bylevel", "multi_strategy"]:
             if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
     _params = {}
     for x, y in params.items():

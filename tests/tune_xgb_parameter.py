@@ -1,24 +1,26 @@
 import os, optuna
 import numpy as np
-import shutil
+from sklearn.datasets import fetch_covtype 
 from kkgbdt.tune import tune_parameter
 
 if __name__ == "__main__":
     filepath = "test.db"
     if os.path.exists(filepath): os.remove(filepath)
-    study = optuna.create_study(study_name="test", storage=f'sqlite:///test.db')
-    num_class = 5
-    x_train   = np.random.rand(1000, 100)
-    y_train   = np.random.randint(0, num_class, 1000)
-    x_valid   = np.random.rand(1000, 100)
-    y_valid   = np.random.randint(0, num_class, 1000)
+    study   = optuna.create_study(study_name="test", storage=f'sqlite:///test.db')
+    data    = fetch_covtype()
+    train_x = data["data"  ][:-data["target"].shape[0]//5 ]
+    train_y = data["target"][:-data["target"].shape[0]//5 ] - 1
+    valid_x = data["data"  ][ -data["target"].shape[0]//5:]
+    valid_y = data["target"][ -data["target"].shape[0]//5:] - 1
+    n_class = np.unique(train_y).shape[0]
     from functools import partial
     func = partial(tune_parameter,
-        mode="xgb", num_class=num_class, n_jobs=1, eval_string='model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration]',
-        x_train=x_train, y_train=y_train, loss_func="multi:softmax", num_iterations=50,
-        x_valid=x_valid, y_valid=y_valid, loss_func_eval="mlogloss", sample_weight="balanced",
+        mode="xgb", num_class=n_class, n_jobs=1, eval_string='model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration]',
+        x_train=train_x, y_train=train_y, loss_func="multi:softmax", num_iterations=50,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval="mlogloss", sample_weight="balanced",
+        early_stopping_rounds=5, early_stopping_name=0,
         params_const = {
-            "learning_rate"    : 0.03,
+            "learning_rate"    : 0.1,
             "num_leaves"       : 100,
             "is_gpu"           : False,
             "random_seed"      : 0,
@@ -27,7 +29,7 @@ if __name__ == "__main__":
             "subsample"        : 1,
             "colsample_bylevel": 1,
             "colsample_bynode" : 1,
-            "max_bin"          : 256,
+            "max_bin"          : 64,
             "min_data_in_bin"  : 5,
         },
         params_search='''{
