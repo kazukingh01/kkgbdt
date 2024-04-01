@@ -64,7 +64,7 @@ if __name__ == "__main__":
                                     continue
                                 model = KkGBDT(n_class, **param)
                                 model.fit(
-                                    train_x, train_y, loss_func=loss_func[mode], num_iterations=300,
+                                    train_x, train_y, loss_func=loss_func[mode], num_iterations=400,
                                     x_valid=valid_x, y_valid=valid_y, loss_func_eval=loss_func_eval[mode], sample_weight="balanced"
                                 )
                                 se = pd.Series(param)
@@ -72,9 +72,9 @@ if __name__ == "__main__":
                                 se["eval"] = log_loss(valid_y, model.predict(valid_x, is_softmax=True))
                                 model = KkGBDT(n_class, **param)
                                 model.fit(
-                                    train_x, train_y, loss_func=loss_func[mode], num_iterations=300,
+                                    train_x, train_y, loss_func=loss_func[mode], num_iterations=400,
                                     x_valid=valid_x, y_valid=valid_y, loss_func_eval=loss_func_eval[mode], sample_weight="balanced",
-                                    early_stopping_rounds=30, early_stopping_name=0, 
+                                    early_stopping_rounds=50, early_stopping_name=0, 
                                 )
                                 se = pd.Series(param)
                                 se["time_erstp"] = model.time_train
