@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import pandas as pd
 from sklearn.datasets import fetch_covtype 
@@ -13,6 +14,9 @@ def log_loss(y: np.ndarray, x: np.ndarray):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--jobs", type=int, default=-1)
+    args = parser.parse_args()
     data    = fetch_covtype()
     train_x = data["data"  ][:-data["target"].shape[0]//5 ]
     train_y = data["target"][:-data["target"].shape[0]//5 ] - 1
@@ -24,7 +28,7 @@ if __name__ == "__main__":
     # public loss
     params_fix = {
         "learning_rate": 0.2,
-        "n_jobs": 24,
+        "n_jobs": args.jobs,
         "min_child_samples": 1,
         "subsample": 1.0,
         "colsample_bylevel": 1.0,
@@ -57,4 +61,5 @@ if __name__ == "__main__":
                         se["time_lgb"] = model.time_train
                         se["eval_lgb"] = log_loss(valid_y, model.predict(valid_x, is_softmax=False))
                         df_eval.append(se)
-    df_eval = pd.concat(df_eval, axis=0, ignore_index=True)
+    df_eval = pd.concat(df_eval, axis=1, ignore_index=True).T
+    df_eval.to_pickle("df_eval.pickle")
