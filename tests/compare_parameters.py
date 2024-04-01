@@ -16,6 +16,7 @@ def log_loss(y: np.ndarray, x: np.ndarray):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=-1)
+    parser.add_argument("--iter", type=int, default=300)
     args = parser.parse_args()
     data    = fetch_covtype()
     train_x = data["data"  ][:-data["target"].shape[0]//5 ]
@@ -68,7 +69,7 @@ if __name__ == "__main__":
                                     continue
                                 model = KkGBDT(n_class, **param)
                                 model.fit(
-                                    train_x, train_y, loss_func=loss_func[mode], num_iterations=400,
+                                    train_x, train_y, loss_func=loss_func[mode], num_iterations=args.iter,
                                     x_valid=valid_x, y_valid=valid_y, loss_func_eval=loss_func_eval[mode], sample_weight="balanced"
                                 )
                                 se = pd.Series(param)
