@@ -47,6 +47,10 @@ if __name__ == "__main__":
         "xgb": "mlogloss",
         "lgb": "multiclass",
     }
+    is_softmax = {
+        "xgb": True,
+        "lgb": False,
+    }
     for max_bin in [32, 64, 128, 256]:
         for num_leaves in [50, 100, 200]:
             for max_depth in [-1, 5, 10]:
@@ -69,16 +73,7 @@ if __name__ == "__main__":
                                 )
                                 se = pd.Series(param)
                                 se["time"] = model.time_train
-                                se["eval"] = log_loss(valid_y, model.predict(valid_x, is_softmax=True))
-                                model = KkGBDT(n_class, **param)
-                                model.fit(
-                                    train_x, train_y, loss_func=loss_func[mode], num_iterations=400,
-                                    x_valid=valid_x, y_valid=valid_y, loss_func_eval=loss_func_eval[mode], sample_weight="balanced",
-                                    early_stopping_rounds=50, early_stopping_name=0, 
-                                )
-                                se = pd.Series(param)
-                                se["time_erstp"] = model.time_train
-                                se["eval_erstp"] = log_loss(valid_y, model.predict(valid_x, is_softmax=True))
+                                se["eval"] = log_loss(valid_y, model.predict(valid_x, is_softmax=is_softmax[mode], iteration_at=model.best_iteration))
                                 df_eval.append(se)
     df_eval = pd.concat(df_eval, axis=1, ignore_index=True).T
     df_eval.to_pickle("df_eval.pickle")

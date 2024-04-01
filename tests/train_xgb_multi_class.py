@@ -35,7 +35,7 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=[CategoricalCrossEntropyLoss(n_class), "mlogloss"],
         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
     )
-    print(model.predict(valid_x, is_softmax=True))
+    print(model.predict(valid_x, is_softmax=True, iteration_at=model.best_iteration))
     print(log_loss(valid_y, model.predict(valid_x, is_softmax=True)))
     # binary logloss with multi_strategy
     model      = KkGBDT(1, mode="xgb", max_bin=64, multi_strategy="multi_output_tree")
@@ -58,4 +58,4 @@ if __name__ == "__main__":
         early_stopping_rounds=None
     )
     print(model.predict(valid_x, is_softmax=True))
-    print(CrossEntropyLoss(n_class)(model.predict(valid_x, is_softmax=False), valid_y_ce))
+    print(CrossEntropyLoss(n_class)(model.predict(valid_x, is_softmax=False, iteration_at=model.best_iteration), valid_y_ce))

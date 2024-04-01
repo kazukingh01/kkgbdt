@@ -28,7 +28,7 @@ if __name__ == "__main__":
     )
     print(model.predict(valid_x, is_softmax=False))
     print(f"best iteration the model.booster have is: {model.booster.best_iteration}")
-    print(log_loss(valid_y, model.predict(valid_x, is_softmax=False, num_iteration=model.booster.best_iteration)))
+    print(log_loss(valid_y, model.predict(valid_x, is_softmax=False, iteration_at=model.best_iteration)))
     # public loss with "use_quantized_grad"
     model = KkGBDT(n_class, mode="lgb", max_bin=64, use_quantized_grad=True, num_grad_quant_bins=8, )
     model.fit(
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     )
     print(model.predict(valid_x, is_softmax=False))
     print(f"best iteration the model.booster have is: {model.booster.best_iteration}")
-    print(log_loss(valid_y, model.predict(valid_x, is_softmax=False, num_iteration=model.booster.best_iteration)))
+    print(log_loss(valid_y, model.predict(valid_x, is_softmax=False, iteration_at=model.best_iteration)))
     # custom loss CategoryCE
     model = KkGBDT(n_class, mode="lgb", max_bin=64)
     model.fit(
@@ -60,4 +60,4 @@ if __name__ == "__main__":
     )
     print(model.predict(valid_x, is_softmax=True))
     print(f"best iteration the model.booster have is: {model.booster.best_iteration}")
-    print(CrossEntropyLoss(n_class)(model.predict(valid_x, is_softmax=False, num_iteration=model.booster.best_iteration), valid_y_ce))
+    print(CrossEntropyLoss(n_class)(model.predict(valid_x, is_softmax=False, iteration_at=model.best_iteration), valid_y_ce))

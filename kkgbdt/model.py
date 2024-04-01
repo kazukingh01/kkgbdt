@@ -46,11 +46,12 @@ class KkGBDT:
             multi_strategy=multi_strategy, verbosity=verbosity
         )
         self.params.update(copy.deepcopy(kwargs))
-        self.evals_result = {}
-        self.classes_     = np.arange(num_class, dtype=int)
-        self.is_softmax   = is_softmax
-        self.loss         = None
-        self.inference    = None
+        self.evals_result   = {}
+        self.classes_       = np.arange(num_class, dtype=int)
+        self.is_softmax     = is_softmax
+        self.best_iteration = 0
+        self.loss           = None
+        self.inference      = None
         if mode == "xgb":
             self.train_func   = train_xgb
             self.predict_func = self.predict_xgb
@@ -100,6 +101,15 @@ class KkGBDT:
             sample_weight=sample_weight, categorical_features=categorical_features,
         )
         self.time_train = time.time() - time_start
+        # best iteration
+        if self.evals_result.get("valid_0") is not None:
+            if early_stopping_name is None: early_stopping_name = 0
+            if isinstance(early_stopping_name, int):
+                list_vals = list(self.evals_result.get("valid_0").values())[early_stopping_name]
+            else:
+                list_vals = self.evals_result.get("valid_0")[early_stopping_name]
+            self.best_iteration = int(np.argmin(np.array(list_vals)))
+            logger.info(f"best iteration is {self.best_iteration}.")
         if self.mode == "lgb": self.booster.__class__ = KkTracer
         # additional prosessing for custom loss
         if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
@@ -113,9 +123,9 @@ class KkGBDT:
             self.feature_importances_ = self.booster.get_fscore()
         else:
             self.feature_importances_ = self.booster.feature_importance()
-    def predict(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
+    def predict(self, input: np.ndarray, *args, is_softmax: bool=None, iteration_at: int=None, **kwargs):
         logger.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
-        output = self.predict_func(input, *args, **kwargs)
+        output = self.predict_func(input, *args, iteration_at=iteration_at, **kwargs)
         if hasattr(self, "inference") and self.inference is not None:
             logger.info("extra inference for output...")
             output = self.inference(output)
@@ -125,14 +135,20 @@ class KkGBDT:
             output = softmax(output)
         logger.info("END")
         return output
-    def predict_xgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
+    def predict_xgb(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
         logger.info("START")
-        output = self.booster.predict(xgb.DMatrix(input), *args, output_margin=True, **kwargs)
+        assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
+        if iteration_at is None: iteration_at = self.best_iteration
+        output = self.booster.predict(xgb.DMatrix(input), *args, output_margin=True, iteration_range=(0, iteration_at), **kwargs)
         logger.info("END")
         return output
-    def predict_lgb(self, input: np.ndarray, *args, is_softmax: bool=None, **kwargs):
+    def predict_lgb(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
         logger.info("START")
-        output = self.booster.predict(input, *args, **kwargs)
+        assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
+        if iteration_at is None:
+            iteration_at = self.best_iteration
+            if iteration_at == 0: iteration_at = -1
+        output = self.booster.predict(input, *args, num_iteration=iteration_at, **kwargs)
         logger.info("END")
         return output
 
