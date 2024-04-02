@@ -6,6 +6,23 @@ from sklearn.datasets import fetch_covtype
 from kkgbdt.model import KkGBDT
 
 
+PARAMS_FIX = {
+    "learning_rate": 0.2,
+    "n_jobs": -1,
+    "min_child_samples": 1,
+    "subsample": 1.0,
+    "colsample_bylevel": 1.0,
+    "colsample_bynode": 1.0,
+    "reg_alpha": 0.0,
+    "reg_lambda": 1e-3,
+    "min_split_gain": 0.0,
+    "min_data_in_bin": 1,
+    "min_child_weight": 1e-3,
+    "colsample_bytree": 0.5,
+    "path_smooth": 0.0,
+}
+
+
 def log_loss(y: np.ndarray, x: np.ndarray):
     assert isinstance(y, np.ndarray) and len(y.shape) == 1
     assert isinstance(x, np.ndarray) and len(x.shape) == 2
@@ -19,6 +36,9 @@ if __name__ == "__main__":
     parser.add_argument("--jobs", type=int, default=-1)
     parser.add_argument("--iter", type=int, default=300)
     args = parser.parse_args()
+    PARAMS_FIX["n_jobs"] = args.jobs
+
+    # data
     data    = fetch_covtype()
     train_x = data["data"  ][:-data["target"].shape[0]//5 ]
     train_y = data["target"][:-data["target"].shape[0]//5 ] - 1
@@ -28,20 +48,6 @@ if __name__ == "__main__":
     df_eval = []
 
     # public loss
-    params_fix = {
-        "learning_rate": 0.2,
-        "n_jobs": args.jobs,
-        "min_child_samples": 1,
-        "subsample": 1.0,
-        "colsample_bylevel": 1.0,
-        "colsample_bynode": 1.0,
-        "reg_alpha": 0.0,
-        "reg_lambda": 1e-3,
-        "min_split_gain": 0.0,
-        "min_data_in_bin": 1,
-        "min_child_weight": 1e-3,
-        "colsample_bytree": 0.5
-    }
     loss_func = {
         "xgb": "multi:softmax",
         "lgb": "multiclass",
@@ -65,7 +71,7 @@ if __name__ == "__main__":
                                 {"max_bin": max_bin, "num_leaves": num_leaves, "max_depth": max_depth, "mode": mode, "num_grad_quant_bins": num_grad_quant_bins, "random_seed": random_seed}
                             )
     for _param in tqdm(list_params):
-        param = copy.deepcopy(params_fix | _param)
+        param = copy.deepcopy(PARAMS_FIX | _param)
         if param["num_grad_quant_bins"] > 0:
             param["use_quantized_grad"] = True
         else:

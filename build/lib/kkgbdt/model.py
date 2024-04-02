@@ -30,7 +30,7 @@ class KkGBDT:
         random_seed: int=0, max_depth: int=-1, min_child_samples: int=20, min_child_weight: float=1e-3,
         subsample: float=1, colsample_bytree: float=0.5, colsample_bylevel: float=1, colsample_bynode: float=1,
         reg_alpha: float=0, reg_lambda: float=0, min_split_gain: float=0, max_bin: int=256, 
-        min_data_in_bin: int=5, multi_strategy: str=None, verbosity: None | int=None, **kwargs
+        min_data_in_bin: int=5, path_smooth: float=0.0, multi_strategy: str=None, verbosity: None | int=None, **kwargs
     ):
         logger.info("START")
         assert isinstance(mode, str) and mode in ["xgb", "lgb"]
@@ -41,9 +41,8 @@ class KkGBDT:
             mode=self.mode, num_class=num_class, learning_rate=learning_rate, num_leaves=num_leaves, n_jobs=n_jobs, is_gpu=is_gpu, 
             random_seed=random_seed, max_depth=max_depth, min_child_samples=min_child_samples, min_child_weight=min_child_weight,
             subsample=subsample, colsample_bytree=colsample_bytree, colsample_bylevel=colsample_bylevel,
-            colsample_bynode=colsample_bynode, reg_alpha=reg_alpha, reg_lambda=reg_lambda, 
-            min_split_gain=min_split_gain, max_bin=max_bin, min_data_in_bin=min_data_in_bin, 
-            multi_strategy=multi_strategy, verbosity=verbosity
+            colsample_bynode=colsample_bynode, reg_alpha=reg_alpha, reg_lambda=reg_lambda, min_split_gain=min_split_gain,
+            max_bin=max_bin, min_data_in_bin=min_data_in_bin, path_smooth=path_smooth, multi_strategy=multi_strategy, verbosity=verbosity
         )
         self.params.update(copy.deepcopy(kwargs))
         self.evals_result   = {}
@@ -414,7 +413,7 @@ def alias_parameters(
     random_seed: int=0, max_depth: int=None, min_child_samples: int=None, min_child_weight: float=None,
     subsample: float=None, colsample_bytree: float=None, colsample_bylevel: float=None,
     colsample_bynode: float=None, reg_alpha: float=None, reg_lambda: float=None, min_split_gain: float=None, 
-    max_bin: int=None, min_data_in_bin: int=None, multi_strategy: str=None, verbosity: int=None,
+    max_bin: int=None, min_data_in_bin: int=None, path_smooth: float=None, multi_strategy: str=None, verbosity: int=None,
 ):
     logger.info(f"START. mode={mode}")
     assert isinstance(mode, str) and mode in ["xgb", "lgb"]
@@ -436,6 +435,7 @@ def alias_parameters(
     assert check_type(min_split_gain, [float, int]) and min_split_gain >= 0
     assert isinstance(max_bin, int) and max_bin >= 4
     assert isinstance(min_data_in_bin, int) and min_data_in_bin >= 1
+    assert isinstance(path_smooth, float) and path_smooth >= 0
     assert multi_strategy is None or multi_strategy in ["one_output_per_tree", "multi_output_tree"]
     assert verbosity is None or isinstance(verbosity, int)
     params = {}
@@ -462,7 +462,7 @@ def alias_parameters(
         params["grow_policy"]       = "depthwise"
         params["multi_strategy"]    = "one_output_per_tree" if multi_strategy is None else multi_strategy
         # min_data_in_bin is not in configlation
-        for x in ["min_child_weight", "min_data_in_bin"]:
+        for x in ["min_child_weight", "min_data_in_bin", "path_smooth"]:
             if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
     else:
         params["num_class"]               = num_class
@@ -488,6 +488,8 @@ def alias_parameters(
         params["min_gain_to_split"]       = min_split_gain
         params["max_bin"]                 = max_bin - 1
         params["min_data_in_bin"]         = min_data_in_bin
+        params["path_smooth"]             = path_smooth
+        if path_smooth > 0.0: assert min_data_in_leaf >= 2
         params["verbosity"]               = -1 if verbosity is None else verbosity
         for x in ["colsample_bylevel", "multi_strategy"]:
             if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
