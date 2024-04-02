@@ -1,4 +1,4 @@
-import argparse
+import argparse, copy
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -62,14 +62,15 @@ if __name__ == "__main__":
                     for random_seed in range(10):
                         for mode in ["xgb", "lgb"]:
                             list_params.append(
-                                {"max_bin": max_bin, "num_leaves": num_leaves, "max_depth": max_depth, "mode": mode, "random_seed": random_seed}
+                                {"max_bin": max_bin, "num_leaves": num_leaves, "max_depth": max_depth, "mode": mode, "num_grad_quant_bins": num_grad_quant_bins, "random_seed": random_seed}
                             )
     for _param in tqdm(list_params):
-        param = (params_fix | _param)
+        param = copy.deepcopy(params_fix | _param)
         if param["num_grad_quant_bins"] > 0:
             param["use_quantized_grad"] = True
         else:
-            param["use_quantized_grad"] = False
+            param["use_quantized_grad"]  = False
+            param["num_grad_quant_bins"] = None
         if param["use_quantized_grad"] and param["mode"] == "xgb":
             continue
         model = KkGBDT(n_class, **param)
