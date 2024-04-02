@@ -71,16 +71,16 @@ if __name__ == "__main__":
             param["num_grad_quant_bins"] = num_grad_quant_bins
         else:
             param["use_quantized_grad"] = False
-        if param["use_quantized_grad"] and mode == "xgb":
+        if param["use_quantized_grad"] and param["mode"] == "xgb":
             continue
         model = KkGBDT(n_class, **param)
         model.fit(
-            train_x, train_y, loss_func=loss_func[mode], num_iterations=args.iter,
-            x_valid=valid_x, y_valid=valid_y, loss_func_eval=loss_func_eval[mode], sample_weight="balanced"
+            train_x, train_y, loss_func=loss_func[param["mode"]], num_iterations=args.iter,
+            x_valid=valid_x, y_valid=valid_y, loss_func_eval=loss_func_eval[param["mode"]], sample_weight="balanced"
         )
         se = pd.Series(param)
         se["time"] = model.time_train
-        se["eval"] = log_loss(valid_y, model.predict(valid_x, is_softmax=is_softmax[mode], iteration_at=model.best_iteration))
+        se["eval"] = log_loss(valid_y, model.predict(valid_x, is_softmax=is_softmax[param["mode"]], iteration_at=model.best_iteration))
         df_eval.append(se)
     df_eval = pd.concat(df_eval, axis=1, ignore_index=True).T
     df_eval.to_pickle("df_eval.pickle")
