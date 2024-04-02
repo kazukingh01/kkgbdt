@@ -61,9 +61,9 @@ if __name__ == "__main__":
                 for num_grad_quant_bins in [0, 4, 8, 16]:
                     for random_seed in range(10):
                         for mode in ["xgb", "lgb"]:
-                            list_params.append({
+                            list_params.append(
                                 {"max_bin": max_bin, "num_leaves": num_leaves, "max_depth": max_depth, "mode": mode, "random_seed": random_seed}
-                            })
+                            )
     for _param in tqdm(list_params):
         param = (params_fix | _param)
         if num_grad_quant_bins > 0:
