@@ -66,9 +66,8 @@ if __name__ == "__main__":
                             )
     for _param in tqdm(list_params):
         param = (params_fix | _param)
-        if num_grad_quant_bins > 0:
+        if param["num_grad_quant_bins"] > 0:
             param["use_quantized_grad"] = True
-            param["num_grad_quant_bins"] = num_grad_quant_bins
         else:
             param["use_quantized_grad"] = False
         if param["use_quantized_grad"] and param["mode"] == "xgb":
