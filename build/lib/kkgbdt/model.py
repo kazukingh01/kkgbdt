@@ -196,6 +196,12 @@ def train_xgb(
     # check params
     if params.get("objective")   is not None: logger.raise_error(f"please set 'objective'   parameter to 'loss_func'.")
     if params.get("eval_metric") is not None: logger.raise_error(f"please set 'eval_metric' parameter to 'loss_func_eval'.")
+    # check GPU
+    if params.get("device") is not None and params["device"] == "cuda":
+        logger.info("Training with GPU mode.")
+        dataset_class = xgb.QuantileDMatrix
+    else:
+        dataset_class = xgb.DMatrix
     # dataset option
     if sample_weight is not None:
         assert isinstance(sample_weight, str) or isinstance(sample_weight, np.ndarray)
@@ -228,8 +234,8 @@ def train_xgb(
             logger.warning("XGBoost basically doesn't support multi task. You should use multi_output_tree.")
         assert len(y_train.shape) == 1
     # set dataset
-    dataset_train = xgb.DMatrix(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
-    dataset_valid = [(dataset_train, "train")] + [(xgb.DMatrix(_x_valid, label=_y_valid), f"valid_{i_valid}") for i_valid, (_x_valid, _y_valid) in enumerate(zip(x_valid, y_valid))]
+    dataset_train = dataset_class(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
+    dataset_valid = [(dataset_train, "train")] + [(dataset_class(_x_valid, label=_y_valid), f"valid_{i_valid}") for i_valid, (_x_valid, _y_valid) in enumerate(zip(x_valid, y_valid))]
     # loss setting
     _loss_func, _loss_func_eval = None, None
     params["eval_metric"] = []
@@ -444,7 +450,8 @@ def alias_parameters(
         params["eta"]         = learning_rate
         params["max_leaves"]  = num_leaves
         params["nthread"]     = n_jobs
-        params["tree_method"] = "hist" if is_gpu is None or is_gpu == False else "gpu_hist"
+        params["tree_method"] = "hist"
+        params["device"]      = "cuda" if is_gpu else "cpu"
         params["seed"]        = random_seed
         params["max_depth"]   = 0 if max_depth <= 0 else max_depth
         # min_child_samples is not in configlation
@@ -458,7 +465,6 @@ def alias_parameters(
         params["gamma"]             = min_split_gain # Maybe different from xgb and lgb
         params["max_bin"]           = max_bin
         params["verbosity"]         = 0 if verbosity is None else verbosity
-        params["tree_method"]       = "hist"
         params["grow_policy"]       = "depthwise"
         params["multi_strategy"]    = "one_output_per_tree" if multi_strategy is None else multi_strategy
         # min_data_in_bin is not in configlation
