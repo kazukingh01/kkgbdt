@@ -435,7 +435,7 @@ def alias_parameters(
     assert check_type(min_split_gain, [float, int]) and min_split_gain >= 0
     assert isinstance(max_bin, int) and max_bin >= 4
     assert isinstance(min_data_in_bin, int) and min_data_in_bin >= 1
-    assert isinstance(path_smooth, float) and path_smooth >= 0
+    assert check_type(path_smooth, [int, float]) and path_smooth >= 0
     assert multi_strategy is None or multi_strategy in ["one_output_per_tree", "multi_output_tree"]
     assert verbosity is None or isinstance(verbosity, int)
     params = {}
@@ -489,7 +489,7 @@ def alias_parameters(
         params["max_bin"]                 = max_bin - 1
         params["min_data_in_bin"]         = min_data_in_bin
         params["path_smooth"]             = path_smooth
-        if path_smooth > 0.0: assert min_data_in_leaf >= 2
+        if path_smooth > 0.0: assert params["min_data_in_leaf"] >= 2
         params["verbosity"]               = -1 if verbosity is None else verbosity
         for x in ["colsample_bylevel", "multi_strategy"]:
             if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
