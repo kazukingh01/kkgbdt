@@ -1,5 +1,6 @@
 import copy, time
 import numpy as np
+from functools import partial
 from sklearn.utils.class_weight import compute_sample_weight
 import xgboost as xgb
 import lightgbm as lgb
@@ -199,7 +200,7 @@ def train_xgb(
     # check GPU
     if params.get("device") is not None and params["device"] == "cuda":
         logger.info("Training with GPU mode.")
-        dataset_class = xgb.QuantileDMatrix
+        dataset_class = partial(xgb.QuantileDMatrix, max_bin=params["max_bin"])
     else:
         dataset_class = xgb.DMatrix
     # dataset option
