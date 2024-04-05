@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='kkgbdt',
-    version='1.2.4',
+    version='1.2.5',
     description='my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM and XGBoost.',
     long_description=long_description,
     long_description_content_type="text/markdown",

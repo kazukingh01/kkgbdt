@@ -419,7 +419,7 @@ def alias_parameters(
     assert isinstance(mode, str) and mode in ["xgb", "lgb"]
     assert isinstance(num_class, int) and num_class > 0
     assert isinstance(learning_rate, float) and learning_rate >= 1e-5 and learning_rate <= 1
-    assert isinstance(num_leaves, int) and num_leaves > 0
+    assert isinstance(num_leaves, int) and num_leaves >= 0
     assert isinstance(n_jobs, int) and (n_jobs > 0 or n_jobs == -1)
     assert isinstance(is_gpu, bool)
     assert isinstance(random_seed, int) and random_seed >= 0
