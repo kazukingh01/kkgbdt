@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # custom loss HuberLoss
     model = KkGBDT(1, mode="lgb", max_bin=64)
     model.fit(
-        train_x, train_y, loss_func=HuberLoss(beta=10), num_iterations=100,
+        train_x, train_y, loss_func=HuberLoss(beta=10), num_iterations=300,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=[HuberLoss(beta=10), "rmse"],
         early_stopping_rounds=20, early_stopping_name=0, 
     )

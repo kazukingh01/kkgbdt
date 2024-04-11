@@ -1,4 +1,4 @@
-import copy, time
+import copy, time, json
 import numpy as np
 from functools import partial
 from sklearn.utils.class_weight import compute_sample_weight
@@ -46,12 +46,15 @@ class KkGBDT:
             max_bin=max_bin, min_data_in_bin=min_data_in_bin, path_smooth=path_smooth, multi_strategy=multi_strategy, verbosity=verbosity
         )
         self.params.update(copy.deepcopy(kwargs))
-        self.evals_result   = {}
-        self.classes_       = np.arange(num_class, dtype=int)
-        self.is_softmax     = is_softmax
-        self.best_iteration = 0
-        self.loss           = None
-        self.inference      = None
+        self.params_pkg      = {}
+        self.evals_result    = {}
+        self.classes_        = np.arange(num_class, dtype=int)
+        self.is_softmax      = is_softmax
+        self.time_train      = 0
+        self.best_iteration  = 0
+        self.total_iteration = 0
+        self.loss            = None
+        self.inference       = None
         if mode == "xgb":
             self.train_func   = train_xgb
             self.predict_func = self.predict_xgb
@@ -60,6 +63,20 @@ class KkGBDT:
             self.predict_func = self.predict_lgb
         logger.info(f"params: {self.params}")
         logger.info("END")
+    def to_json(self):
+        return {
+            "mode": self.mode,
+            "classes": self.classes_.tolist(),
+            "loss": str(self.loss),
+            "params": self.params,
+            "params_pkg": self.params_pkg,
+            "is_softmax": self.is_softmax,
+            "best_iteration": self.best_iteration,
+            "total_iteration": self.total_iteration,
+            "time_train": self.time_train,
+        }
+    def __str__ (self):
+        return self.__class__.__name__ + " " + json.dumps(self.to_json(), indent=4)
     def copy(self):
         instance = copy.deepcopy(self)
         for x in ["best_iteration", "best_score"]:
@@ -101,6 +118,11 @@ class KkGBDT:
             sample_weight=sample_weight, categorical_features=categorical_features,
         )
         self.time_train = time.time() - time_start
+        # save params
+        if self.mode == "xgb":
+            self.params_pkg = json.loads(self.booster.save_config())
+        else:
+            self.params_pkg = copy.deepcopy(self.booster.params)
         # best iteration
         if self.evals_result.get("valid_0") is not None:
             if early_stopping_name is None: early_stopping_name = 0
@@ -108,7 +130,8 @@ class KkGBDT:
                 list_vals = list(self.evals_result.get("valid_0").values())[early_stopping_name]
             else:
                 list_vals = self.evals_result.get("valid_0")[early_stopping_name]
-            self.best_iteration = int(np.argmin(np.array(list_vals)))
+            self.best_iteration  = int(np.argmin(np.array(list_vals)))
+            self.total_iteration = len(list_vals)
             logger.info(f"best iteration is {self.best_iteration}.")
         if self.mode == "lgb": self.booster.__class__ = KkTracer
         # additional prosessing for custom loss
@@ -199,6 +222,7 @@ def train_xgb(
     if params.get("eval_metric") is not None: logger.raise_error(f"please set 'eval_metric' parameter to 'loss_func_eval'.")
     # check GPU
     if params.get("device") is not None and params["device"] == "cuda":
+        # https://xgboost.readthedocs.io/en/stable/gpu/index.html
         logger.info("Training with GPU mode.")
         dataset_class = partial(xgb.QuantileDMatrix, max_bin=params["max_bin"])
     else:
