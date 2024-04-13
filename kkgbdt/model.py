@@ -88,7 +88,7 @@ class KkGBDT:
         x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
         loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
         stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
-        sample_weight: str | np.ndarray=None, categorical_features: list[int]=None
+        sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None
     ):
         logger.info("START")
         assert loss_func is not None
@@ -107,6 +107,23 @@ class KkGBDT:
                 else:
                     _loss_func_eval.append(func_eval)
             loss_func_eval = _loss_func_eval
+        if sample_weight is not None:
+            # sample_weight can be multi. calculate step by step
+            if isinstance(sample_weight, str) or isinstance(sample_weight, np.ndarray): sample_weight = [sample_weight, ]
+            assert check_type_list(sample_weight, [str, np.ndarray])
+            _sample_weight = np.ones(y_train.shape[0]).astype(float)
+            logger.info(f"sample weight before: {sample_weight}")
+            for sw in sample_weight:
+                if isinstance(sw, str):
+                    assert sw in ["balanced"]
+                    assert len(y_train.shape) == 1 and y_train.dtype in [int, np.int16, np.int32, np.int64]
+                    assert np.unique(y_train).shape == np.bincount(y_train).shape
+                    _sample_weight = _sample_weight * compute_sample_weight("balanced", y_train) # https://github.com/microsoft/LightGBM/blob/a5285985992ebd376c356a0ac1d10a190338550b/python-package/lightgbm/sklearn.py#L771
+                else:
+                    assert len(sw.shape) == 1 and len(y_train.shape) == 1 and y_train.shape[0] == sw.shape[0]
+                    _sample_weight = _sample_weight * sw
+            sample_weight = _sample_weight.copy()
+            logger.info(f"sample weight after:  {sample_weight}")
         # training
         time_start = time.time()
         self.booster = self.train_func(
@@ -187,7 +204,7 @@ def train_xgb(
     early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
     # option
-    sample_weight: str | np.ndarray=None, categorical_features: list[int]=None
+    sample_weight: None | np.ndarray=None, categorical_features: list[int]=None
 ):
     """
     Params::
@@ -228,15 +245,6 @@ def train_xgb(
     else:
         dataset_class = xgb.DMatrix
     # dataset option
-    if sample_weight is not None:
-        assert isinstance(sample_weight, str) or isinstance(sample_weight, np.ndarray)
-        if isinstance(sample_weight, str):
-            assert sample_weight in ["balanced"]
-            assert len(y_train.shape) == 1 and y_train.dtype in [int, np.int16, np.int32, np.int64]
-            assert np.unique(y_train).shape == np.bincount(y_train).shape
-            sample_weight = compute_sample_weight(sample_weight, y_train)
-        else:
-            assert len(sample_weight.shape) == 1 and len(y_train.shape) == 1 and y_train.shape[0] == sample_weight.shape[0]
     enable_categorical = False
     if categorical_features is not None:
         assert check_type_list(categorical_features, int)
@@ -323,7 +331,7 @@ def train_lgb(
     early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     stopping_name:str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
     # option
-    sample_weight: str | np.ndarray=None, categorical_features: list[int]=None
+    sample_weight: None | np.ndarray=None, categorical_features: list[int]=None
 ):
     """
     Params::
@@ -358,15 +366,6 @@ def train_lgb(
     if params.get("metric")    is not None: logger.raise_error(f"please set 'metric'    parameter to 'loss_func_eval'.")
     params["num_iterations"] = num_iterations
     # dataset option
-    if sample_weight is not None:
-        assert isinstance(sample_weight, str) or isinstance(sample_weight, np.ndarray)
-        if isinstance(sample_weight, str):
-            assert sample_weight in ["balanced"]
-            assert len(y_train.shape) == 1 and y_train.dtype in [int, np.int16, np.int32, np.int64]
-            assert np.unique(y_train).shape == np.bincount(y_train).shape
-            sample_weight = compute_sample_weight(sample_weight, y_train) # https://github.com/microsoft/LightGBM/blob/a5285985992ebd376c356a0ac1d10a190338550b/python-package/lightgbm/sklearn.py#L771
-        else:
-            assert len(sample_weight.shape) == 1 and len(y_train.shape) == 1 and y_train.shape[0] == sample_weight.shape[0]
     if categorical_features is not None:
         assert check_type_list(categorical_features, int)
     else:

@@ -24,7 +24,7 @@ if __name__ == "__main__":
     model   = KkGBDT(n_class, mode="lgb", max_bin=64)
     model.fit(
         train_x, train_y, loss_func="multiclass", num_iterations=100,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass"], sample_weight="balanced",
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass"], sample_weight=["balanced", np.random.rand(train_x.shape[0])],
     )
     print(model.predict(valid_x, is_softmax=False))
     print(f"best iteration the model.booster have is: {model.booster.best_iteration}")
