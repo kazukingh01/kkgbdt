@@ -1,6 +1,6 @@
 from lightgbm import Dataset
 import numpy as np
-from kkgbdt.util.logger import set_logger
+from kklogger import set_logger
 logger = set_logger(__name__)
 
 

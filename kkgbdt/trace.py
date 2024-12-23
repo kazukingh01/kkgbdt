@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from lightgbm.engine import Booster
-from kkgbdt.util.logger import set_logger
+from kklogger import set_logger
 logger = set_logger(__name__)
 
 

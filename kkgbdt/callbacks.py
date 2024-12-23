@@ -3,7 +3,7 @@ from typing import List, Union
 from xgboost.callback import TrainingCallback
 from lightgbm.callback import EarlyStopException, _format_eval_result, _LogEvaluationCallback, CallbackEnv
 from kkgbdt.util.com import check_type
-from kkgbdt.util.logger import set_logger
+from kklogger import set_logger
 logger = set_logger(__name__)
 
 

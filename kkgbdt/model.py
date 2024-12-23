@@ -12,7 +12,7 @@ from kkgbdt.trace import KkTracer
 from kkgbdt.callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
 from kkgbdt.util.numpy import softmax
 from kkgbdt.util.com import check_type, check_type_list
-from kkgbdt.util.logger import set_logger
+from kklogger import set_logger
 logger = set_logger(__name__)
 
 
