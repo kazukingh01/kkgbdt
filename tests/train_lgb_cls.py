@@ -31,7 +31,7 @@ if __name__ == "__main__":
     n_iter  = 500
     lr      = 0.05
     max_bin = 64
-    ndepth  = 12
+    ndepth  = -1
     valeval = {}
     LOGGER.info("data train", color=["BOLD", "CYAN"])
     LOGGER.info(f"\n{pd.DataFrame(train_y).groupby(0).size()}")
@@ -41,11 +41,11 @@ if __name__ == "__main__":
     LOGGER.info("Test public loss", color=["BOLD", "UNDERLINE", "GREEN"])
     model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     LOGGER.info("train without validation", color=["BOLD", "CYAN"])
-    model.fit(train_x, train_y, loss_func="multiclass", num_iterations=10)
+    model.fit(train_x, train_y, loss_func="multiclass", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])])
     LOGGER.info("train with validation", color=["BOLD", "CYAN"])
     model.fit(
         train_x, train_y, loss_func="multiclass", num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass", Accuracy(top_k=2)], sample_weight=["balanced", np.random.rand(train_x.shape[0])],
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass", Accuracy(top_k=2)], sample_weight="balanced",
         early_stopping_rounds=20, early_stopping_name=0,
     )
     ndf_pred = model.predict(valid_x, iteration_at=model.best_iteration)
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     LOGGER.info("custom loss FocalLoss", color=["BOLD", "UNDERLINE", "GREEN"])
     model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func=FocalLoss(n_class, gamma=0.5), num_iterations=n_iter,
+        train_x, train_y, loss_func=FocalLoss(n_class, gamma=0.5, dx=1e-5), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class), Accuracy(top_k=2)],
         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
     )
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     LOGGER.info("custom loss LogitMarginL1Loss", color=["BOLD", "UNDERLINE", "GREEN"])
     model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func=LogitMarginL1Loss(n_class, margin=2.0, alpha=0.01), num_iterations=n_iter,
+        train_x, train_y, loss_func=LogitMarginL1Loss(n_class, margin=20.0, alpha=0.01, dx=1e-5), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class), Accuracy(top_k=2)],
         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
     )
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     valid_y_ce = np.zeros((valid_y.shape[0], n_class), dtype=int)
     valid_y_ce[np.arange(valid_y_ce.shape[0]), valid_y] = 1
     model.fit(
-        train_x, train_y_ce, loss_func=CrossEntropyLoss(n_class), num_iterations=n_iter,
+        train_x, train_y_ce, loss_func=CrossEntropyLoss(n_class, dx=1e-5), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y_ce, loss_func_eval=["__copy__", CrossEntropyLossArgmax(n_class), Accuracy(top_k=2)],
         early_stopping_rounds=20, early_stopping_name=0, 
         stopping_name="ce", stopping_val=3.70, stopping_rounds=5, stopping_is_over=True
@@ -157,4 +157,4 @@ if __name__ == "__main__":
     valeval["CrossEntropyNDCGLoss_log"] = log_loss(valid_y, ndf_pred)
     valeval["CrossEntropyNDCGLoss_acc"] = Accuracy(top_k=2)(ndf_pred, valid_y)
 
-    LOGGER.info(f"{json.dumps(valeval, indent=2)}")
+    LOGGER.info(f"{json.dumps({x:float(y) for x, y in valeval.items()}, indent=2)}")
