@@ -145,7 +145,7 @@ class LGBCustomObjective:
         return grad, hess
     @classmethod
     def convert_xgb_output(cls, grad: np.ndarray, hess: np.ndarray):
-        return grad, hess
+        return grad.reshape(-1), hess.reshape(-1)
     @classmethod
     def convert_lgb_output(cls, grad: np.ndarray, hess: np.ndarray):
         return grad.T.reshape(-1), hess.T.reshape(-1)
@@ -468,6 +468,7 @@ class LogitMarginL1Loss(Loss):
         self.is_prob    = True
         self.conv_t_sum = _return_1
         self.ndfid      = None
+        self.indexes    = None
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         assert len(x.shape) == 2
@@ -481,6 +482,7 @@ class LogitMarginL1Loss(Loss):
             assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
             assert (t - t.astype(int)).sum() == 0 # There is no fraction
             self.ndfid = np.identity(x.shape[1], dtype=np.float32)
+        self.indexes = np.arange(t.shape[0] * 10, dtype=int) # x 10, in case shape is different at each iteration
     def convert(self, x: np.ndarray, t: np.ndarray):
         x, t = super().convert(x, t)
         if self.ndfid is not None:
@@ -497,12 +499,13 @@ class LogitMarginL1Loss(Loss):
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x_margin = np.max(x, axis=1).reshape(-1, 1) - x - self.margin
-        x_margin = (x_margin > 0).astype(x.dtype)
+        x_margin = -1 * (x_margin > 0).astype(x.dtype) # -1 or 0
+        x_margin[self.indexes[:x.shape[0]], np.argmax(x, axis=1)] = (x.shape[1] - 1) # -1 or 0 or n_class - 1
         x = softmax(x)
         if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         t_sum  = self.conv_t_sum(t)
         t_sum2 = t_sum * x
-        grad   = t_sum2 - t - (self.alpha * x_margin)
+        grad   = t_sum2 - t + (self.alpha * x_margin)
         hess   = t_sum2 * (1 - x)
         return grad, hess
 
