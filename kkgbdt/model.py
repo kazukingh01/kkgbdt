@@ -97,12 +97,8 @@ class KkGBDT:
         assert loss_func is not None
         assert num_iterations is not None
         self.loss = loss_func
-        if isinstance(self.loss, str):
-            assert self.is_softmax is None # This is for check.
-            self.is_softmax = False
-        if isinstance(self.loss, Loss) and self.is_softmax is None:
+        if isinstance(self.loss, Loss) and self.is_softmax is None and self.loss.is_prob:
             self.is_softmax = True
-        assert isinstance(self.is_softmax, bool)
         if isinstance(self.loss, Loss) and hasattr(self.loss, "inference"):
             self.inference = self.loss.inference
         # common processing
@@ -110,6 +106,13 @@ class KkGBDT:
             if not isinstance(loss_func_eval, list): loss_func_eval = [loss_func_eval, ]
             _loss_func_eval = []
             for func_eval in loss_func_eval:
+                if isinstance(self.loss, str) and self.mode == "xgb" and isinstance(func_eval, Loss):
+                    LOGGER.warning(
+                        "When loss function is normal and eval function is custom, input of convert_xgb_input(cls, y_pred: np.ndarray, data: xgb.DMatrix) " +
+                        "is strange. The input is like y_pred [4. 4. 1. ... 0. 0. 0.] even classification, it's not probability. So in this case, " + 
+                        "custom function for evalation is ignored."
+                    )
+                    continue
                 if isinstance(func_eval, str) and func_eval == "__copy__":
                     assert isinstance(loss_func, Loss)
                     _loss_func_eval.append(loss_func)
@@ -179,7 +182,7 @@ class KkGBDT:
             LOGGER.info("extra inference for output...")
             output = self.inference(output)
         if is_softmax is None: is_softmax = self.is_softmax
-        if is_softmax:
+        if is_softmax is not None and is_softmax:
             LOGGER.info("softmax output...")
             if len(output.shape) == 1:
                 output = sigmoid(output)
@@ -268,12 +271,15 @@ def train_xgb(
         else:
             categorical_features = None
     # multi strategy
-    if params.get("multi_strategy") is not None and params["multi_strategy"] == "multi_output_tree":
+    if "multi_strategy" in params and params["multi_strategy"] == "multi_output_tree":
         # see: https://xgboost.readthedocs.io/en/stable/python/examples/multioutput_regression.html#sphx-glr-python-examples-multioutput-regression-py
-        assert len(y_train.shape) == 2
+        assert len(y_train.shape) == 2 and y_train.shape[-1] == params["num_class"]
         params["num_target"] = y_train.shape[-1]
-        if params["num_class"] != 1:
-            LOGGER.raise_error(f"You cannot use multi class and multi_strategy at the same time. num_class: {params['num_class']}, num_target: {params['num_target']}")
+        LOGGER.warning(
+            f"Multi class and multi_strategy cannot use at the same time. " + 
+            f"num_class: {params['num_class']}, num_target: {params['num_target']}. set num_class=1."
+        )
+        params["num_class"] = 1
     else:
         if len(y_train.shape) != 1:
             LOGGER.warning("XGBoost basically doesn't support multi task. You should use multi_output_tree.")
@@ -288,6 +294,7 @@ def train_xgb(
         params["objective"] = loss_func
     else:
         _loss_func = LGBCustomObjective(loss_func, mode="xgb")
+        params["disable_default_eval_metric"] = 1
     if loss_func_eval is not None:
         for func_eval in loss_func_eval:
             if isinstance(func_eval, str):
@@ -295,6 +302,7 @@ def train_xgb(
             else:
                 if _loss_func_eval is None: _loss_func_eval = []
                 _loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
+        params["disable_default_eval_metric"] = 1
     if _loss_func_eval is not None:
         if len(_loss_func_eval) > 1: LOGGER.warning(f"xgboost's custom metric is supported only one function. so set this metric: {_loss_func_eval[0]}")
         _loss_func_eval = _loss_func_eval[0]

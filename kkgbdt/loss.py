@@ -52,6 +52,7 @@ class Loss:
         self.n_classes    = n_classes
         self.conv_shape   = _return
         self.is_check     = True
+        self.is_prob      = False
         self.reduction    = np.mean if reduction == "mean" else np.sum
         self.is_higher_better = is_higher_better
     def __str__(self):
@@ -100,14 +101,11 @@ class LGBCustomObjective:
         return grad, hess
     @classmethod
     def convert_xgb_input(cls, y_pred: np.ndarray, data: xgb.DMatrix):
-        if hasattr(data, "custom_label"):
-            y_true = data.get_custom_label(data.get_label())
-        else:
-            y_true = data.get_label()
-            if y_pred.shape[0] != y_true.shape[0]:
-                # multi_strategy: "multi_output_tree" mode
-                # see: https://xgboost.readthedocs.io/en/stable/python/examples/multioutput_regression.html#sphx-glr-python-examples-multioutput-regression-py
-                y_true = data.get_label().reshape(y_pred.shape)
+        y_true = data.get_label()
+        if y_pred.shape[0] != y_true.shape[0]:
+            # multi_strategy: "multi_output_tree" mode
+            # see: https://xgboost.readthedocs.io/en/stable/python/examples/multioutput_regression.html#sphx-glr-python-examples-multioutput-regression-py
+            y_true = data.get_label().reshape(y_pred.shape)
         return y_pred, y_true
     @classmethod
     def convert_lgb_input(cls, y_pred: np.ndarray, data: DatasetLGB):
@@ -147,7 +145,7 @@ class LGBCustomObjective:
         return grad, hess
     @classmethod
     def convert_xgb_output(cls, grad: np.ndarray, hess: np.ndarray):
-        return grad.reshape(-1), hess.reshape(-1)
+        return grad, hess
     @classmethod
     def convert_lgb_output(cls, grad: np.ndarray, hess: np.ndarray):
         return grad.T.reshape(-1), hess.T.reshape(-1)
@@ -193,6 +191,7 @@ class BinaryCrossEntropyLoss(Loss):
         assert check_type(dx, [float, int]) and dx >= 0.0 and dx < 1.0
         super().__init__("bce", n_classes=1, is_higher_better=False)
         self.dx      = dx
+        self.is_prob = True
         self.is_clip = (dx > 0)
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
@@ -200,12 +199,12 @@ class BinaryCrossEntropyLoss(Loss):
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = sigmoid(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         return -1 * (t * np.log(x) + (1 - t) * np.log(1 - x))
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = sigmoid(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         grad = x - t
         hess = (1 - x) * x
         return grad, hess
@@ -218,6 +217,7 @@ class CrossEntropyLoss(Loss):
         super().__init__("ce", n_classes=n_classes, is_higher_better=False)
         self.dx         = dx
         self.is_clip    = (dx > 0)
+        self.is_prob    = True
         self.conv_t_sum = _return_1
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
@@ -232,7 +232,7 @@ class CrossEntropyLoss(Loss):
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         return (-1 * t * np.log(x)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         """
@@ -241,7 +241,7 @@ class CrossEntropyLoss(Loss):
         """
         x, t = self.convert(x, t)
         x = softmax(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         t_sum  = self.conv_t_sum(t)
         t_sum2 = t_sum * x
         grad   = t_sum2 - t
@@ -256,6 +256,7 @@ class CrossEntropyLossArgmax(Loss):
         super().__init__("cemax", n_classes=n_classes, is_higher_better=False)
         self.dx      = dx
         self.is_clip = (dx > 0)
+        self.is_prob = True
         self.conv_t  = _return_1
         self.indexes = None
     def check(self, x: np.ndarray, t: np.ndarray):
@@ -276,7 +277,7 @@ class CrossEntropyLossArgmax(Loss):
         x, t = self.convert(x, t)
         t = self.conv_t(t)
         x = softmax(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         x = x[self.indexes[:t.shape[0]], t]
         return (-1 * np.log(x))
     def gradhess(self, x: np.ndarray, t: np.ndarray):
@@ -290,6 +291,7 @@ class CategoricalCrossEntropyLoss(CrossEntropyLoss):
         super().__init__(n_classes, dx=dx)
         self.smoothing = smoothing
         self.is_smooth = self.smoothing > 0.0
+        self.is_prob   = True
         self.name      = f"cce({format(smoothing, '.0e')})" if self.is_smooth else "cce"
         self.ndfid     = None
     def check(self, x: np.ndarray, t: np.ndarray):
@@ -321,6 +323,7 @@ class FocalLoss(Loss):
         self.gamma   = gamma
         self.dx      = dx
         self.is_clip = (dx > 0)
+        self.is_prob = True
         self.ndfid   = None
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
@@ -332,7 +335,7 @@ class FocalLoss(Loss):
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         t = self.ndfid[t.astype(int)]
         return -1 * ((1 - x[t]) ** self.gamma) * np.log(x[t])
     def gradhess(self, x: np.ndarray, t: np.ndarray):
@@ -341,7 +344,7 @@ class FocalLoss(Loss):
         """
         x, t = self.convert(x, t)
         x    = softmax(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         t    = self.ndfid[t.astype(int)]
         yk   = x[t].reshape(-1, 1)
         yk_log  = np.log(yk)
@@ -462,6 +465,7 @@ class LogitMarginL1Loss(Loss):
         super().__init__(f"ce_margin_{self.alpha}_{self.margin}", n_classes=n_classes, is_higher_better=False)
         self.dx         = dx
         self.is_clip    = (dx > 0)
+        self.is_prob    = True
         self.conv_t_sum = _return_1
         self.ndfid      = None
     def check(self, x: np.ndarray, t: np.ndarray):
@@ -486,7 +490,7 @@ class LogitMarginL1Loss(Loss):
         x, t = self.convert(x, t)
         x_margin = np.clip(np.max(x, axis=1).reshape(-1, 1) - x - self.margin, 0.0, None)
         x = softmax(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         loss_ce     = (-1 * t * np.log(x)).sum(axis=1)
         loss_margin = self.alpha * np.sum(x_margin, axis=1)
         return loss_ce + loss_margin
@@ -495,7 +499,7 @@ class LogitMarginL1Loss(Loss):
         x_margin = np.max(x, axis=1).reshape(-1, 1) - x - self.margin
         x_margin = (x_margin > 0).astype(x.dtype)
         x = softmax(x)
-        if self.is_clip: x = np.clip(x, self.dx, 1 - self.dx)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         t_sum  = self.conv_t_sum(t)
         t_sum2 = t_sum * x
         grad   = t_sum2 - t - (self.alpha * x_margin)
@@ -568,6 +572,7 @@ class CrossEntropyNDCGLoss(Loss):
         https://arxiv.org/pdf/1911.09798.pdf
         """
         super().__init__("xendcg", n_classes=n_classes, is_higher_better=False)
+        self.is_prob = True
         if eta is not None:
             assert check_type_list(eta, [float, int])
             self.eta = np.array(eta).astype(float)
@@ -617,6 +622,7 @@ class DensitySoftmax(Loss):
         super().__init__("dence", n_classes=n_classes, is_higher_better=False)
         self.lr      = learning_rate
         self.dx      = dx
+        self.is_prob = True
         self.weight  = np.random.rand(n_input, n_classes)
         self.bias    = np.random.rand(1,       n_classes)
         self.maxsmpl = maxsmpl
