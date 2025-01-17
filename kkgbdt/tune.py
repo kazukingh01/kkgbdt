@@ -3,12 +3,14 @@ import numpy as np
 from kkgbdt.model import KkGBDT
 from kkgbdt.loss import Loss
 from kklogger import set_logger
-logger = set_logger(__name__)
 
 
 __all__ = [
     "tune_parameter"
 ]
+
+
+LOGGER = set_logger(__name__)
 
 
 def tune_parameter(
@@ -60,7 +62,7 @@ def tune_parameter(
             )
         >>> study.optimize(func, n_trials=100)
     """
-    logger.info("START")
+    LOGGER.info("START")
     assert isinstance(eval_string, str)
     assert isinstance(x_train, np.ndarray)
     assert isinstance(y_train, np.ndarray)
@@ -78,7 +80,7 @@ def tune_parameter(
         stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time,
         sample_weight=sample_weight, categorical_features=categorical_features,
     )
-    logger.info("END")
+    LOGGER.info("END")
     return eval(eval_string, {}, {"model": model, "np": np})
     
 

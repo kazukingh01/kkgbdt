@@ -10,8 +10,12 @@ __all__ = [
 
 
 def softmax(x):
-    f = np.exp(x)/np.sum(np.exp(x), axis=1, keepdims=True)
-    return f
+    """
+    The code without njit is faster than with njit
+    """
+    exp_x = np.exp(x)
+    sum_exp_x = np.sum(exp_x, axis=-1, keepdims=True)
+    return exp_x / sum_exp_x
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))

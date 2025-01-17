@@ -1,14 +1,10 @@
-import os, shutil
-from typing import List, Union
-
-
 __all__ = [
     "check_type",
     "check_type_list",
 ]
 
 
-def check_type(instance: object, _type: Union[object, List[object]]):
+def check_type(instance: object, _type: object | list[object]):
     _type = [_type] if not (isinstance(_type, list) or isinstance(_type, tuple)) else _type
     is_check = [isinstance(instance, __type) for __type in _type]
     if sum(is_check) > 0:
@@ -16,7 +12,7 @@ def check_type(instance: object, _type: Union[object, List[object]]):
     else:
         return False
 
-def check_type_list(instances: List[object], _type: Union[object, List[object]], *args: Union[object, List[object]]):
+def check_type_list(instances: list[object], _type: object | list[object], *args: object | list[object]):
     """
     Usage::
         >>> check_type_list([1,2,3,4], int)

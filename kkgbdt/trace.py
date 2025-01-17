@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from lightgbm.engine import Booster
 from kklogger import set_logger
-logger = set_logger(__name__)
 
 
 __all__ = [
@@ -10,9 +9,12 @@ __all__ = [
 ]
 
 
+LOGGER = set_logger(__name__)
+
+
 class KkTracer(Booster):
     def create_tree_dataframe(self):
-        logger.info("START")
+        LOGGER.info("START")
         dftree = self.trees_to_dataframe()
         dftree["leaf_index"] = (dftree["node_index"].str.split("-").str[-1].str[1:]).astype(int).astype(float)
         dftree.loc[~dftree["threshold"].isna(), "leaf_index"] = float("nan")

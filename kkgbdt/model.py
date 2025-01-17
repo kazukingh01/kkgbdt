@@ -10,10 +10,12 @@ from kkgbdt.loss import Loss, LGBCustomObjective, LGBCustomEval
 from kkgbdt.dataset import DatasetLGB
 from kkgbdt.trace import KkTracer
 from kkgbdt.callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
-from kkgbdt.util.numpy import softmax
+from kkgbdt.util.numpy import softmax, sigmoid
 from kkgbdt.util.com import check_type, check_type_list
-from kklogger import set_logger
-logger = set_logger(__name__)
+from kklogger import set_logger, set_loglevel, LoggingNameException
+
+
+LOGGER = set_logger(__name__)
 
 
 __all__ = [
@@ -21,21 +23,22 @@ __all__ = [
     "train_xgb",
     "train_lgb",
     "alias_parameter",
+    "set_all_loglevel",
 ]
 
 
 class KkGBDT:
     def __init__(
-        self, num_class: int, mode: str="xgb", is_softmax: bool=False, 
+        self, num_class: int, mode: str="xgb", is_softmax: bool=None, 
         learning_rate: float=0.1, num_leaves: int=100, n_jobs: int=-1, is_gpu: bool=False, 
         random_seed: int=0, max_depth: int=-1, min_child_samples: int=20, min_child_weight: float=1e-3,
         subsample: float=1, colsample_bytree: float=0.5, colsample_bylevel: float=1, colsample_bynode: float=1,
         reg_alpha: float=0, reg_lambda: float=0, min_split_gain: float=0, max_bin: int=256, 
         min_data_in_bin: int=5, path_smooth: float=0.0, multi_strategy: str=None, verbosity: None | int=None, **kwargs
     ):
-        logger.info("START")
+        LOGGER.info("START")
         assert isinstance(mode, str) and mode in ["xgb", "lgb"]
-        assert isinstance(is_softmax, bool)
+        assert is_softmax is None or isinstance(is_softmax, bool)
         self.booster = None
         self.mode    = mode
         self.params  = alias_parameters(
@@ -61,8 +64,8 @@ class KkGBDT:
         else:
             self.train_func   = train_lgb
             self.predict_func = self.predict_lgb
-        logger.info(f"params: {self.params}")
-        logger.info("END")
+        LOGGER.info(f"params: {self.params}")
+        LOGGER.info("END")
     def to_json(self):
         return {
             "mode": self.mode,
@@ -90,10 +93,16 @@ class KkGBDT:
         stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
         sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None
     ):
-        logger.info("START")
+        LOGGER.info("START")
         assert loss_func is not None
         assert num_iterations is not None
         self.loss = loss_func
+        if isinstance(self.loss, str):
+            assert self.is_softmax is None # This is for check.
+            self.is_softmax = False
+        if isinstance(self.loss, Loss) and self.is_softmax is None:
+            self.is_softmax = True
+        assert isinstance(self.is_softmax, bool)
         if isinstance(self.loss, Loss) and hasattr(self.loss, "inference"):
             self.inference = self.loss.inference
         # common processing
@@ -112,7 +121,7 @@ class KkGBDT:
             if isinstance(sample_weight, str) or isinstance(sample_weight, np.ndarray): sample_weight = [sample_weight, ]
             assert check_type_list(sample_weight, [str, np.ndarray])
             _sample_weight = np.ones(y_train.shape[0]).astype(float)
-            logger.info(f"sample weight before: {sample_weight}")
+            LOGGER.info(f"sample weight before: {sample_weight}")
             for sw in sample_weight:
                 if isinstance(sw, str):
                     assert sw in ["balanced"]
@@ -123,7 +132,7 @@ class KkGBDT:
                     assert len(sw.shape) == 1 and len(y_train.shape) == 1 and y_train.shape[0] == sw.shape[0]
                     _sample_weight = _sample_weight * sw
             sample_weight = _sample_weight.copy()
-            logger.info(f"sample weight after:  {sample_weight}")
+            LOGGER.info(f"sample weight after:  {sample_weight}")
         # training
         time_start = time.time()
         self.booster = self.train_func(
@@ -149,47 +158,50 @@ class KkGBDT:
                 list_vals = self.evals_result.get("valid_0")[early_stopping_name]
             self.best_iteration  = int(np.argmin(np.array(list_vals)))
             self.total_iteration = len(list_vals)
-            logger.info(f"best iteration is {self.best_iteration}.")
+            LOGGER.info(f"best iteration is {self.best_iteration}.")
         if self.mode == "lgb": self.booster.__class__ = KkTracer
         # additional prosessing for custom loss
         if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
             output = self.predict_func(x_train)
             self.loss.extra_processing(output, y_train)
         self.set_parameter_after_training()
-        logger.info(f"Time: {self.time_train} s.")
-        logger.info("END")
+        LOGGER.info(f"Time: {self.time_train} s.")
+        LOGGER.info("END")
     def set_parameter_after_training(self):
         if self.mode == "xgb":
             self.feature_importances_ = self.booster.get_fscore()
         else:
             self.feature_importances_ = self.booster.feature_importance()
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, iteration_at: int=None, **kwargs):
-        logger.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
+        LOGGER.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
         output = self.predict_func(input, *args, iteration_at=iteration_at, **kwargs)
         if hasattr(self, "inference") and self.inference is not None:
-            logger.info("extra inference for output...")
+            LOGGER.info("extra inference for output...")
             output = self.inference(output)
         if is_softmax is None: is_softmax = self.is_softmax
         if is_softmax:
-            logger.info("softmax output...")
-            output = softmax(output)
-        logger.info("END")
+            LOGGER.info("softmax output...")
+            if len(output.shape) == 1:
+                output = sigmoid(output)
+            else:
+                output = softmax(output)
+        LOGGER.info("END")
         return output
     def predict_xgb(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
-        logger.info("START")
+        LOGGER.info("START")
         assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
         if iteration_at is None: iteration_at = self.best_iteration
         output = self.booster.predict(xgb.DMatrix(input), *args, output_margin=True, iteration_range=(0, iteration_at), **kwargs)
-        logger.info("END")
+        LOGGER.info("END")
         return output
     def predict_lgb(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
-        logger.info("START")
+        LOGGER.info("START")
         assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
         if iteration_at is None:
             iteration_at = self.best_iteration
             if iteration_at == 0: iteration_at = -1
         output = self.booster.predict(input, *args, num_iteration=iteration_at, **kwargs)
-        logger.info("END")
+        LOGGER.info("END")
         return output
 
 
@@ -218,7 +230,7 @@ def train_xgb(
                 see: https://xgboost.readthedocs.io/en/stable/parameter.html#learning-task-parameters
                 mlogloss, rmse, ...
     """
-    logger.info("START")
+    LOGGER.info("START")
     assert isinstance(params, dict)
     assert isinstance(x_train, np.ndarray) and len(x_train.shape) == 2
     assert isinstance(y_train, np.ndarray) and len(y_train.shape) in [1, 2]
@@ -235,12 +247,12 @@ def train_xgb(
         if not isinstance(loss_func_eval, list): loss_func_eval = [loss_func_eval, ]
         assert check_type_list(loss_func_eval, [str, Loss])
     # check params
-    if params.get("objective")   is not None: logger.raise_error(f"please set 'objective'   parameter to 'loss_func'.")
-    if params.get("eval_metric") is not None: logger.raise_error(f"please set 'eval_metric' parameter to 'loss_func_eval'.")
+    if params.get("objective")   is not None: LOGGER.raise_error(f"please set 'objective'   parameter to 'loss_func'.")
+    if params.get("eval_metric") is not None: LOGGER.raise_error(f"please set 'eval_metric' parameter to 'loss_func_eval'.")
     # check GPU
     if params.get("device") is not None and params["device"] == "cuda":
         # https://xgboost.readthedocs.io/en/stable/gpu/index.html
-        logger.info("Training with GPU mode.")
+        LOGGER.info("Training with GPU mode.")
         dataset_class = partial(xgb.QuantileDMatrix, max_bin=params["max_bin"])
     else:
         dataset_class = xgb.DMatrix
@@ -261,10 +273,10 @@ def train_xgb(
         assert len(y_train.shape) == 2
         params["num_target"] = y_train.shape[-1]
         if params["num_class"] != 1:
-            logger.raise_error(f"You cannot use multi class and multi_strategy at the same time. num_class: {params['num_class']}, num_target: {params['num_target']}")
+            LOGGER.raise_error(f"You cannot use multi class and multi_strategy at the same time. num_class: {params['num_class']}, num_target: {params['num_target']}")
     else:
         if len(y_train.shape) != 1:
-            logger.warning("XGBoost basically doesn't support multi task. You should use multi_output_tree.")
+            LOGGER.warning("XGBoost basically doesn't support multi task. You should use multi_output_tree.")
         assert len(y_train.shape) == 1
     # set dataset
     dataset_train = dataset_class(x_train, label=y_train, weight=sample_weight, feature_types=categorical_features, enable_categorical=enable_categorical)
@@ -284,7 +296,7 @@ def train_xgb(
                 if _loss_func_eval is None: _loss_func_eval = []
                 _loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
     if _loss_func_eval is not None:
-        if len(_loss_func_eval) > 1: logger.warning(f"xgboost's custom metric is supported only one function. so set this metric: {_loss_func_eval[0]}")
+        if len(_loss_func_eval) > 1: LOGGER.warning(f"xgboost's custom metric is supported only one function. so set this metric: {_loss_func_eval[0]}")
         _loss_func_eval = _loss_func_eval[0]
     # callbacks
     callbacks = [PrintEvalation()]
@@ -308,7 +320,7 @@ def train_xgb(
             TrainStopping(stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time)
         )
     # train
-    logger.info(f"params: {params}")
+    LOGGER.info(f"params: {params}")
     model = xgb.train(
         params, dataset_train, 
         num_boost_round=num_iterations, evals=dataset_valid, obj=_loss_func,
@@ -316,7 +328,7 @@ def train_xgb(
         evals_result=evals_result, verbose_eval=False, xgb_model=None,
         callbacks=callbacks
     )
-    logger.info("END")
+    LOGGER.info("END")
     return model
 
 
@@ -345,7 +357,7 @@ def train_lgb(
                 see: https://lightgbm.readthedocs.io/en/latest/Parameters.html#metric
                 rmse, auc, multi_logloss, ...
     """
-    logger.info("START")
+    LOGGER.info("START")
     assert isinstance(params, dict)
     assert isinstance(x_train, np.ndarray) and len(x_train.shape) == 2
     assert isinstance(y_train, np.ndarray) and len(y_train.shape) in [1, 2]
@@ -362,9 +374,8 @@ def train_lgb(
         if not isinstance(loss_func_eval, list): loss_func_eval = [loss_func_eval, ]
         assert check_type_list(loss_func_eval, [str, Loss])
     # check params
-    if params.get("objective") is not None: logger.raise_error(f"please set 'objective' parameter to 'loss_func'.")
-    if params.get("metric")    is not None: logger.raise_error(f"please set 'metric'    parameter to 'loss_func_eval'.")
-    params["num_iterations"] = num_iterations
+    if params.get("objective") is not None: LOGGER.raise_error(f"please set 'objective' parameter to 'loss_func'.")
+    if params.get("metric")    is not None: LOGGER.raise_error(f"please set 'metric'    parameter to 'loss_func_eval'.")
     # dataset option
     if categorical_features is not None:
         assert check_type_list(categorical_features, int)
@@ -388,9 +399,7 @@ def train_lgb(
                 if _loss_func_eval is None: _loss_func_eval = []
                 _loss_func_eval.append(LGBCustomEval(func_eval, mode="lgb", is_higher_better=func_eval.is_higher_better))
     else:
-        if isinstance(loss_func, str):
-            _loss_func_eval = [loss_func, ]
-        else:
+        if not isinstance(loss_func, str):
             _loss_func_eval = [LGBCustomEval(loss_func, mode="lgb", is_higher_better=loss_func.is_higher_better), ]
     # callbacks
     callbacks = [
@@ -427,13 +436,13 @@ def train_lgb(
             callback_stop_training(dict_train, stopping_val, stopping_rounds, stopping_is_over, stopping_train_time)
         )
     # train
-    logger.info(f"params: {params}")
+    LOGGER.info(f"params: {params}")
     model = lgb.train(
-        params, dataset_train,
+        params, dataset_train, num_boost_round=num_iterations,
         valid_sets=dataset_valid, valid_names=["train"]+[f"valid_{i}" for i in range(len(dataset_valid)-1)],
         feval=_loss_func_eval, callbacks=callbacks
     )
-    logger.info("END")
+    LOGGER.info("END")
     return model
 
 
@@ -445,7 +454,7 @@ def alias_parameters(
     colsample_bynode: float=None, reg_alpha: float=None, reg_lambda: float=None, min_split_gain: float=None, 
     max_bin: int=None, min_data_in_bin: int=None, path_smooth: float=None, multi_strategy: str=None, verbosity: int=None,
 ):
-    logger.info(f"START. mode={mode}")
+    LOGGER.info(f"START. mode={mode}")
     assert isinstance(mode, str) and mode in ["xgb", "lgb"]
     assert isinstance(num_class, int) and num_class > 0
     assert isinstance(learning_rate, float) and learning_rate >= 1e-5 and learning_rate <= 1
@@ -493,7 +502,7 @@ def alias_parameters(
         params["multi_strategy"]    = "one_output_per_tree" if multi_strategy is None else multi_strategy
         # min_data_in_bin is not in configlation
         for x in ["min_child_weight", "min_data_in_bin", "path_smooth"]:
-            if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
+            if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
     else:
         params["num_class"]               = num_class
         params["learning_rate"]           = learning_rate
@@ -522,9 +531,26 @@ def alias_parameters(
         if path_smooth > 0.0: assert params["min_data_in_leaf"] >= 2
         params["verbosity"]               = -1 if verbosity is None else verbosity
         for x in ["colsample_bylevel", "multi_strategy"]:
-            if locals()[x] is not None: logger.warning(f"{x} is not in configlation for {mode}")
+            if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
     _params = {}
     for x, y in params.items():
         if y is not None: _params[x] = y
-    logger.info("END")
+    LOGGER.info("END")
     return _params
+
+
+def set_all_loglevel(log_level: str):
+    LOGGER.info("START")
+    try: set_loglevel("kkgbdt.model",     log_level=log_level)
+    except LoggingNameException: pass 
+    try: set_loglevel("kkgbdt.dataset",   log_level=log_level)
+    except LoggingNameException: pass 
+    try: set_loglevel("kkgbdt.callbacks", log_level=log_level)
+    except LoggingNameException: pass 
+    try: set_loglevel("kkgbdt.loss",      log_level=log_level)
+    except LoggingNameException: pass 
+    try: set_loglevel("kkgbdt.trace",     log_level=log_level)
+    except LoggingNameException: pass 
+    try: set_loglevel("kkgbdt.tune",      log_level=log_level)
+    except LoggingNameException: pass 
+    LOGGER.info("END")
