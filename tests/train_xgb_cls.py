@@ -97,7 +97,6 @@ if __name__ == "__main__":
         train_x, train_y_ce, loss_func=CrossEntropyLoss(n_class, dx=1e-5), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y_ce, loss_func_eval=["__copy__", CrossEntropyLossArgmax(n_class), Accuracy(top_k=2)],
         early_stopping_rounds=20, early_stopping_name=0, 
-        stopping_name="ce", stopping_val=3.70, stopping_rounds=5, stopping_is_over=True
     )
     ndf_pred = model.predict(valid_x)
     valeval["CrossEntropyLoss_log"] = log_loss(valid_y, ndf_pred)

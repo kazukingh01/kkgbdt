@@ -13,4 +13,4 @@ python train_lgb_multi_task.py
 python train_lgb_tree_structure.py
 
 # it's for GPU
-python train_xgb_cls_gpu.py
+# python train_xgb_cls_gpu.py
