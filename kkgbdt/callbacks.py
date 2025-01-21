@@ -29,53 +29,57 @@ class PrintEvalation(TrainingCallback):
 
 
 class TrainStopping(TrainingCallback):
-    def __init__(self, metric_name: str, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None):
+    def __init__(
+        self, train_stopping_val: int | float=None, train_stopping_rounds: int=None,
+        train_stopping_is_over: bool=True, train_stopping_time: int | float=None
+    ):
         super().__init__()
-        assert isinstance(metric_name, str)
-        if stopping_val is not None:
-            assert isinstance(stopping_val, float)
-            assert isinstance(stopping_rounds, int) and stopping_rounds > 0
-            assert isinstance(stopping_is_over, bool)
-        if isinstance(stopping_train_time, int): stopping_train_time = float(stopping_train_time)
-        if stopping_train_time is not None: assert isinstance(stopping_train_time, float) and stopping_train_time > 0
-        self.metric_name         = metric_name
-        self.stopping_val        = stopping_val
-        self.stopping_rounds     = stopping_rounds
-        self.stopping_is_over    = stopping_is_over
-        self.stopping_train_time = stopping_train_time
-        self.dict_train          = {"time": 9999999999}
+        assert train_stopping_val  is None or check_type(train_stopping_val,  [int, float])
+        assert train_stopping_time is None or check_type(train_stopping_time, [int, float])
+        assert isinstance(train_stopping_rounds, int) and train_stopping_rounds > 0
+        assert isinstance(train_stopping_is_over, bool)
+        self.train_stopping_val     = train_stopping_val
+        self.train_stopping_rounds  = train_stopping_rounds
+        self.train_stopping_is_over = train_stopping_is_over
+        self.train_stopping_time    = train_stopping_time
+        self.dict_train             = {"time": float("inf")}
     def after_iteration(self, model, epoch: int, evals_log: TrainingCallback.EvalsLog) -> bool:
-        if (self.stopping_train_time is not None) and ((time.time() - self.dict_train["time"]) > self.stopping_train_time):
+        if (self.train_stopping_time is not None) and ((time.time() - self.dict_train["time"]) > self.train_stopping_time) and epoch < self.train_stopping_rounds:
             LOGGER.info("Stopping training because time is over.")
             return True
-        if self.stopping_val is not None:
-            boolwk = (evals_log["train"][self.metric_name][-1] > self.stopping_val) if self.stopping_is_over else (evals_log["train"][self.metric_name][-1] < self.stopping_val)
-            if (epoch > self.stopping_rounds) and boolwk:
-                LOGGER.info(f"Stopping training because loss value is {'over' if self.stopping_is_over else 'less'} than {self.stopping_val}.")
+        if self.train_stopping_val is not None and epoch >= self.train_stopping_rounds:
+            dictwk = evals_log["train"]
+            valwk  = dictwk[list(dictwk.keys())[0]]
+            boolwk = (valwk[-1] > self.train_stopping_val) if self.train_stopping_is_over else (valwk[-1] < self.train_stopping_val)
+            if boolwk:
+                LOGGER.info(f"Stopping training because loss value is {'over' if self.train_stopping_is_over else 'less'} than {self.train_stopping_val}.")
                 return True
         self.dict_train["time"] = time.time()
         return False
 
 
-def callback_stop_training(dict_train: dict, stopping_val: float, stopping_rounds: int, stopping_is_over: bool, stopping_train_time: float):
+def callback_stop_training(dict_train: dict, train_stopping_val: int | float, train_stopping_rounds: int, train_stopping_is_over: bool, train_stopping_time: int | float):
     """
     If training loss does not reach the threshold, it will be terminated first.
     """
     def _init(env):
-        dict_train["time"] = time.time()
+        dict_train["time"] = float("inf")
     def _callback(env):
         if not dict_train: _init(env)
         _, _, result, _ = env.evaluation_result_list[0]
-        if check_type(stopping_train_time, [int, float]) and ((time.time() - dict_train["time"]) > stopping_train_time):
+        boolwk = False
+        if check_type(train_stopping_time, [int, float]) and ((time.time() - dict_train["time"]) > train_stopping_time) and env.iteration < train_stopping_rounds:
+            # In case training step time is too slow within "stopping_rounds" steps
+            boolwk = True
+        if check_type(train_stopping_val, [float, int]) and isinstance(train_stopping_rounds, int) and env.iteration >= train_stopping_rounds:
+            # In case training result is too bad over "stopping_rounds" steps
+            if train_stopping_is_over and result > train_stopping_val:
+                boolwk = True
+            elif train_stopping_is_over == False and result < train_stopping_val:
+                boolwk = True
+        if boolwk:
             LOGGER.info(f'stop training. iteration: {env.iteration}, score: {result}')
             raise EarlyStopException(env.iteration, env.evaluation_result_list)
-        if check_type(stopping_val, [float, int]) and isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds:
-            if stopping_is_over and result > stopping_val:
-                LOGGER.info(f'stop training. iteration: {env.iteration}, score: {result}')
-                raise EarlyStopException(env.iteration, env.evaluation_result_list)
-            elif stopping_is_over == False and result < stopping_val:
-                LOGGER.info(f'stop training. iteration: {env.iteration}, score: {result}')
-                raise EarlyStopException(env.iteration, env.evaluation_result_list)
         dict_train["time"] = time.time()
     _callback.order = 150
     return _callback

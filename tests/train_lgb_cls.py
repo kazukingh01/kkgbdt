@@ -38,11 +38,19 @@ if __name__ == "__main__":
     LOGGER.info("data valid", color=["BOLD", "CYAN"])
     LOGGER.info(f"\n{pd.DataFrame(valid_y).groupby(0).size()}")
 
-    LOGGER.info("Test public loss", color=["BOLD", "UNDERLINE", "GREEN"])
+    LOGGER.info("Test training stop", color=["BOLD", "UNDERLINE", "GREEN"])
     model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
-    LOGGER.info("train without validation", color=["BOLD", "CYAN"])
-    model.fit(train_x, train_y, loss_func="multiclass", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])])
-    LOGGER.info("train with validation", color=["BOLD", "CYAN"])
+    model.fit(
+        train_x, train_y, loss_func="multiclass", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])],
+        train_stopping_val=0.1, train_stopping_rounds=5, train_stopping_is_over=True
+    )
+    model.fit(
+        train_x, train_y, loss_func="multiclass", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])],
+        train_stopping_time=0.01, train_stopping_rounds=5
+    )
+
+    LOGGER.info("public loss multiclass", color=["BOLD", "CYAN"])
+    model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
         train_x, train_y, loss_func="multiclass", num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass", Accuracy(top_k=2)], sample_weight="balanced",
@@ -120,8 +128,7 @@ if __name__ == "__main__":
     model.fit(
         train_x, train_y_ce, loss_func=CrossEntropyLoss(n_class, dx=1e-5), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y_ce, loss_func_eval=["__copy__", CrossEntropyLossArgmax(n_class), Accuracy(top_k=2)],
-        early_stopping_rounds=20, early_stopping_name=0, 
-        stopping_name="ce", stopping_val=3.70, stopping_rounds=5, stopping_is_over=True
+        early_stopping_rounds=20, early_stopping_name=0
     )
     ndf_pred = model.predict(valid_x)
     valeval["CrossEntropyLoss_log"] = log_loss(valid_y, ndf_pred)

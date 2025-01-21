@@ -90,7 +90,7 @@ class KkGBDT:
         self, x_train: np.ndarray, y_train: np.ndarray, loss_func: str | Loss=None, num_iterations: int=None,
         x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
         loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
-        stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
+        train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
         sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None
     ):
         LOGGER.info("START")
@@ -142,8 +142,8 @@ class KkGBDT:
             copy.deepcopy(self.params), num_iterations, x_train, y_train, self.loss,
             evals_result=self.evals_result, x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
             early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
-            stopping_name=stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, 
-            stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time,
+            train_stopping_val=train_stopping_val, train_stopping_rounds=train_stopping_rounds, 
+            train_stopping_is_over=train_stopping_is_over, train_stopping_time=train_stopping_time,
             sample_weight=sample_weight, categorical_features=categorical_features,
         )
         self.time_train = time.time() - time_start
@@ -217,7 +217,7 @@ def train_xgb(
     x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None, loss_func_eval: str | Loss=None,
     # early stopping parameter
     early_stopping_rounds: int=None, early_stopping_name: int | str=None,
-    stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
+    train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
     # option
     sample_weight: None | np.ndarray=None, categorical_features: list[int]=None
 ):
@@ -321,11 +321,13 @@ def train_xgb(
         callbacks.append(
             EarlyStopping(early_stopping_rounds, metric_name=metric_name, data_name="valid_0", save_best=True)
         )
-    ## train stopping
-    if stopping_name is not None:
-        assert stopping_val is not None or stopping_train_time is not None
+    ## train stopping ( triggered by eval value is too low or training step time is too slow )
+    if train_stopping_val is not None or train_stopping_time is not None:
         callbacks.append(
-            TrainStopping(stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time)
+            TrainStopping(
+                train_stopping_val=train_stopping_val, train_stopping_rounds=train_stopping_rounds, 
+                train_stopping_is_over=train_stopping_is_over, train_stopping_time=train_stopping_time
+            )
         )
     # train
     LOGGER.info(f"params: {params}")
@@ -349,7 +351,7 @@ def train_lgb(
     x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None, loss_func_eval: str | Loss | list[str | Loss]=None,
     # early stopping parameter
     early_stopping_rounds: int=None, early_stopping_name: int | str=None,
-    stopping_name:str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
+    train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
     # option
     sample_weight: None | np.ndarray=None, categorical_features: list[int]=None
 ):
@@ -434,15 +436,14 @@ def train_lgb(
         else:
             metric_name = early_stopping_name
         callbacks.append(callback_best_iter(dict_eval_best, early_stopping_rounds, metric_name))
-    ## train stopping
-    if stopping_val is not None or stopping_train_time is not None:
-        assert stopping_val is None or isinstance(stopping_val, float)
-        if stopping_train_time is not None:
-            assert isinstance(stopping_train_time, float)
-            assert isinstance(stopping_rounds, int) and stopping_rounds > 0
-            assert isinstance(stopping_is_over, bool)
+    ## train stopping ( triggered by eval value is too low or training step time is too slow ) 
+    if train_stopping_val is not None or train_stopping_time is not None:
+        assert train_stopping_val  is None or check_type(train_stopping_val,  [int, float])
+        assert train_stopping_time is None or check_type(train_stopping_time, [int, float])
+        assert isinstance(train_stopping_rounds, int) and train_stopping_rounds > 0
+        assert isinstance(train_stopping_is_over, bool)
         callbacks.append(
-            callback_stop_training(dict_train, stopping_val, stopping_rounds, stopping_is_over, stopping_train_time)
+            callback_stop_training(dict_train, train_stopping_val, train_stopping_rounds, train_stopping_is_over, train_stopping_time)
         )
     # train
     LOGGER.info(f"params: {params}")

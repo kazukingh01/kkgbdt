@@ -34,9 +34,9 @@ if __name__ == "__main__":
     LOGGER.info(f"\n{pd.Series(valid_y).describe}")
 
     LOGGER.info("public loss rmse", color=["BOLD", "UNDERLINE", "GREEN"])
-    model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model   = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func="rmse", num_iterations=n_iter,
+        train_x, train_y, loss_func="reg:squarederror", num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["rmse", MSELoss()], 
         early_stopping_rounds=20, early_stopping_name=0,
     )
@@ -44,17 +44,17 @@ if __name__ == "__main__":
     valeval["rmse_rmse"] = rmse(valid_y, ndf_pred)
 
     LOGGER.info("public loss huber", color=["BOLD", "UNDERLINE", "GREEN"])
-    model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func="huber", num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["huber", MSELoss()],
+        train_x, train_y, loss_func="reg:pseudohubererror", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["mphe", MSELoss()],
         early_stopping_rounds=20, early_stopping_name=0, 
     )
     ndf_pred = model.predict(valid_x)
     valeval["huber_rmse"] = rmse(valid_y, ndf_pred)
 
     LOGGER.info("custom loss MSELoss", color=["BOLD", "UNDERLINE", "GREEN"])
-    model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
         train_x, train_y, loss_func=MSELoss(), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", MAELoss()],

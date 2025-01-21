@@ -18,7 +18,7 @@ def tune_parameter(
     x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: str | Loss=None, num_iterations: int=None,
     x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
     loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
-    stopping_name: str=None, stopping_val: float=None, stopping_rounds: int=None, stopping_is_over: bool=True, stopping_train_time: float=None,
+    train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
     sample_weight: str | np.ndarray=None, categorical_features: list[int]=None,
     params_const = {
         "learning_rate"    : 0.03,
@@ -76,12 +76,9 @@ def tune_parameter(
         x_train, y_train, loss_func=loss_func, num_iterations=num_iterations, 
         x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
         early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
-        stopping_name=stopping_name, stopping_val=stopping_val, stopping_rounds=stopping_rounds, 
-        stopping_is_over=stopping_is_over, stopping_train_time=stopping_train_time,
+        train_stopping_val=train_stopping_val, train_stopping_rounds=train_stopping_rounds, 
+        train_stopping_is_over=train_stopping_is_over, train_stopping_time=train_stopping_time,
         sample_weight=sample_weight, categorical_features=categorical_features,
     )
     LOGGER.info("END")
     return eval(eval_string, {}, {"model": model, "np": np})
-    
-
-
