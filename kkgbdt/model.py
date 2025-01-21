@@ -422,14 +422,15 @@ def train_lgb(
         if isinstance(early_stopping_name, int):
             assert (early_stopping_name >= 0) and (loss_func_eval is not None) 
             metric_name = loss_func_eval[early_stopping_name]
-            if isinstance(metric_name, Loss): metric_name = metric_name.name
+            if isinstance(metric_name, Loss):
+                metric_name = metric_name.name
             else:
                 dict_conv = {
                     "multiclass": "multi_logloss",
                     "binary": "binary_logloss",
                 }
-                assert metric_name in dict_conv
-                metric_name = dict_conv[metric_name]
+                if metric_name in dict_conv:
+                    metric_name = dict_conv[metric_name]
         else:
             metric_name = early_stopping_name
         callbacks.append(callback_best_iter(dict_eval_best, early_stopping_rounds, metric_name))

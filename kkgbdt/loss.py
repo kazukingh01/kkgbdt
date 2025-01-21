@@ -24,7 +24,6 @@ __all__ = [
     "FocalLoss",
     "MSELoss",
     "MAELoss",
-    "HuberLoss",
     "Accuracy",
     "LogitMarginL1Loss",
     "MultiTaskLoss",
@@ -281,7 +280,7 @@ class CrossEntropyLossArgmax(Loss):
         x = x[self.indexes[:t.shape[0]], t]
         return (-1 * np.log(x))
     def gradhess(self, x: np.ndarray, t: np.ndarray):
-        raise Exception(f"class: {self.__class__.__name__} has not gradient and hessian.")
+        raise Exception(f"class: {self.__class__.__name__} doesn't have gradient and hessian.")
 
 
 class CategoricalCrossEntropyLoss(CrossEntropyLoss):
@@ -384,35 +383,7 @@ class MAELoss(Loss):
         x, t = self.convert(x, t)
         return np.abs(x - t)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
-        x, t = self.convert(x, t)
-        grad = np.ones(x.shape, dtype=np.float32)
-        grad[x < t] = -1
-        hess = np.zeros(x.shape, dtype=np.float32)
-        return grad, hess
-
-
-class HuberLoss(Loss):
-    def __init__(self, n_classes: int=1, beta: float=1.0):
-        assert isinstance(n_classes, int) and n_classes > 0
-        super().__init__("huber", n_classes=n_classes, is_higher_better=False)
-        self.beta = beta
-    def loss(self, x: np.ndarray, t: np.ndarray):
-        x, t = self.convert(x, t)
-        diff   = x - t
-        boolwk = ((-self.beta <= diff) & (diff <= self.beta))
-        loss   = self.beta * np.abs(diff) - 0.5 * (self.beta ** 2) 
-        loss[boolwk] = 0.5 * (diff[boolwk] ** 2)
-        return loss
-    def gradhess(self, x: np.ndarray, t: np.ndarray):
-        x, t = self.convert(x, t)
-        diff   = x - t
-        boolwk = ((-self.beta <= diff) & (diff <= self.beta))
-        grad = np.ones(t.shape, dtype=np.float32) * self.beta
-        grad[diff < 0] = -1.0 * self.beta
-        grad[boolwk] = (x - t)[boolwk]
-        hess = np.zeros(t.shape, dtype=np.float32)
-        hess[boolwk] = 1.0
-        return grad, hess
+        raise Exception(f"class: {self.__class__.__name__} doesn't have hessian.")
 
 
 class Accuracy(Loss):
@@ -445,7 +416,7 @@ class Accuracy(Loss):
         x = x[:, :self.top_k]
         return (x == t.reshape(-1, 1)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
-        raise Exception(f"class: {self.__class__.__name__} has not gradient and hessian.")
+        raise Exception(f"class: {self.__class__.__name__} doesn't have gradient and hessian.")
 
 
 class LogitMarginL1Loss(Loss):
@@ -566,7 +537,7 @@ class MultiTaskEvalLoss(Loss):
         x, t = self.convert(x, t)
         return self.loss_func.loss(x, t)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
-        raise Exception(f"class: {self.__class__.__name__} has not gradient and hessian.")
+        raise Exception(f"class: {self.__class__.__name__} doesn't have gradient and hessian.")
 
 
 class CrossEntropyNDCGLoss(Loss):

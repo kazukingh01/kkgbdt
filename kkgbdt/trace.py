@@ -41,10 +41,10 @@ class KkTracer(Booster):
         dfwk                  = self.tracer_dftree["leaf_index"] + self.tracer_dftree["leaf_index_add"]
         self.tracer_leaf      = dfwk.dropna().astype(int).reset_index().sort_values(0)["index"].values.copy()
         self.tracer_dfmat     = self.create_path_matrix(self.tracer_leaf.reshape(1, -1), aggregate_func="mean", n_deep=2)
-        logger.info("END")
+        LOGGER.info("END")
 
     def create_path_matrix(self, tracer_leaf: np.ndarray, aggregate_func: str="sum", n_deep: int=1):
-        logger.info("START")
+        LOGGER.info("START")
         assert isinstance(aggregate_func, str) and aggregate_func in ["mean", "sum"]
         assert isinstance(n_deep, int) and n_deep > 0
         _, _, ndf_thre, ndf_gain, ndf_col = self.interpret_path(tracer_leaf)
@@ -75,20 +75,20 @@ class KkTracer(Booster):
         ndf[dfmat["index1"].values, dfmat["index2"].values] = dfmat["gain"].values.copy()
         tmp = dfwk[["colname_main", "colname_thre"]].apply(lambda x: tuple(x), axis=1)
         df  = pd.DataFrame(ndf, index=tmp.tolist(), columns=tmp.tolist())
-        logger.info("END")
+        LOGGER.info("END")
         return df
 
     def predict_leaf_index(self, test_x, *args, **kwargs):
-        logger.info("START")
+        LOGGER.info("START")
         leaf_index = self.predict(test_x, *args, pred_leaf=True, **kwargs)
         if len(leaf_index.shape) == 1: leaf_index = leaf_index.reshape(-1, 1)
         leaf_index    = leaf_index + self.tracer_index_add
         leaf_df_index = self.tracer_leaf[leaf_index]
-        logger.info("END")
+        LOGGER.info("END")
         return leaf_df_index
     
     def interpret_path(self, leaf_df_index: np.ndarray):
-        logger.info("START")
+        LOGGER.info("START")
         assert isinstance(leaf_df_index, np.ndarray) and len(leaf_df_index.shape) == 2
         leaf_values   = self.tracer_dftree["value"].values[leaf_df_index]
         ndf_path      = leaf_df_index.reshape(-1, 1, leaf_df_index.shape[-1])
@@ -103,7 +103,7 @@ class KkTracer(Booster):
         ndf_path[ndf_bool] = self.tracer_dftree.shape[0] + 1
         ndf_path = np.sort(ndf_path, axis=1)
         ndf_path[ndf_path == self.tracer_dftree.shape[0] + 1] = -1
-        logger.info("END")
+        LOGGER.info("END")
         return (
             leaf_values,
             ndf_path,
