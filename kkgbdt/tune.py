@@ -1,8 +1,9 @@
 import copy
 import numpy as np
-from kkgbdt.model import KkGBDT
-from kkgbdt.loss import Loss
+# local package
 from kklogger import set_logger
+from .model import KkGBDT
+from .loss import Loss
 
 
 __all__ = [

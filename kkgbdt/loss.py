@@ -4,9 +4,9 @@ from functools import partial
 from scipy.misc import derivative
 from scipy.stats import norm
 from kkgbdt.dataset import DatasetLGB
-from kkgbdt.util.numpy import sigmoid, softmax
-from kkgbdt.util.com import check_type_list, check_type
 from kklogger import set_logger
+from .numpy import sigmoid, softmax
+from .com import check_type_list, check_type
 
 
 LOGGER = set_logger(__name__)

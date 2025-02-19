@@ -1,9 +1,8 @@
 import time
-from typing import List, Union
 from xgboost.callback import TrainingCallback
 from lightgbm.callback import EarlyStopException, _format_eval_result, _LogEvaluationCallback, CallbackEnv
-from kkgbdt.util.com import check_type
 from kklogger import set_logger
+from .com import check_type
 
 
 __all__ = [
@@ -85,7 +84,7 @@ def callback_stop_training(dict_train: dict, train_stopping_val: int | float, tr
     return _callback
 
 
-def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, int]):
+def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: str | int):
     """
     Determine best iteration for valid0
     """

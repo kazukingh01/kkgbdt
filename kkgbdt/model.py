@@ -6,13 +6,14 @@ import xgboost as xgb
 import lightgbm as lgb
 from xgboost.callback import EarlyStopping
 from lightgbm.callback import record_evaluation
-from kkgbdt.loss import Loss, LGBCustomObjective, LGBCustomEval
-from kkgbdt.dataset import DatasetLGB
-from kkgbdt.trace import KkTracer
-from kkgbdt.callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
-from kkgbdt.util.numpy import softmax, sigmoid
-from kkgbdt.util.com import check_type, check_type_list
+# local package
 from kklogger import set_logger, set_loglevel, LoggingNameException
+from .loss import Loss, LGBCustomObjective, LGBCustomEval
+from .dataset import DatasetLGB
+from .trace import KkTracer
+from .callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
+from .numpy import softmax, sigmoid
+from .com import check_type, check_type_list
 
 
 LOGGER = set_logger(__name__)
