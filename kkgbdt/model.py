@@ -1,4 +1,4 @@
-import copy, time, json
+import copy, time, json, base64, json
 import numpy as np
 from functools import partial
 from sklearn.utils.class_weight import compute_sample_weight
@@ -12,7 +12,7 @@ from .loss import Loss, LGBCustomObjective, LGBCustomEval
 from .dataset import DatasetLGB
 from .trace import KkTracer
 from .callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
-from .numpy import softmax, sigmoid
+from .functions import softmax, sigmoid
 from .com import check_type, check_type_list
 
 
@@ -50,15 +50,17 @@ class KkGBDT:
             max_bin=max_bin, min_data_in_bin=min_data_in_bin, path_smooth=path_smooth, multi_strategy=multi_strategy, verbosity=verbosity
         )
         self.params.update(copy.deepcopy(kwargs))
-        self.params_pkg      = {}
-        self.evals_result    = {}
-        self.classes_        = np.arange(num_class, dtype=int)
-        self.is_softmax      = is_softmax
-        self.time_train      = 0
-        self.best_iteration  = 0
-        self.total_iteration = 0
-        self.loss            = None
-        self.inference       = None
+        self.params_pkg          = {}
+        self.evals_result        = {}
+        self.classes_            = [int(x) for x in np.arange(num_class, dtype=int)]
+        self.is_softmax          = is_softmax
+        self.time_train          = 0
+        self.best_iteration      = -1
+        self.total_iteration     = -1
+        self.feature_importances = []
+        self.loss                = None
+        self.inference           = None
+        self.booster             = None
         if mode == "xgb":
             self.train_func   = train_xgb
             self.predict_func = self.predict_xgb
@@ -67,20 +69,23 @@ class KkGBDT:
             self.predict_func = self.predict_lgb
         LOGGER.info(f"params: {self.params}")
         LOGGER.info("END")
-    def to_json(self):
+    def to_dict(self):
         return {
             "mode": self.mode,
-            "classes": self.classes_.tolist(),
-            "loss": str(self.loss),
+            "classes_": self.classes_,
+            "loss": self.loss.to_dict() if isinstance(self.loss, Loss) else str(self.loss),
             "params": self.params,
             "params_pkg": self.params_pkg,
             "is_softmax": self.is_softmax,
             "best_iteration": self.best_iteration,
             "total_iteration": self.total_iteration,
             "time_train": self.time_train,
+            "feature_importances": self.feature_importances,
         }
     def __str__ (self):
-        return self.__class__.__name__ + " " + json.dumps(self.to_json(), indent=4)
+        return f"{self.__class__.__name__}({self.mode}, iters={self.total_iteration}, best={self.best_iteration}, loss={self.loss})"
+    def __repr__(self):
+        return self.__str__()
     def copy(self):
         instance = copy.deepcopy(self)
         for x in ["best_iteration", "best_score"]:
@@ -92,7 +97,8 @@ class KkGBDT:
         x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
         loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
         train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
-        sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None
+        sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None,
+        group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None,
     ):
         LOGGER.info("START")
         assert loss_func is not None
@@ -145,7 +151,7 @@ class KkGBDT:
             early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
             train_stopping_val=train_stopping_val, train_stopping_rounds=train_stopping_rounds, 
             train_stopping_is_over=train_stopping_is_over, train_stopping_time=train_stopping_time,
-            sample_weight=sample_weight, categorical_features=categorical_features,
+            sample_weight=sample_weight, categorical_features=categorical_features, group_train=group_train, group_valid=group_valid,
         )
         self.time_train = time.time() - time_start
         # save params
@@ -157,12 +163,13 @@ class KkGBDT:
         if self.evals_result.get("valid_0") is not None:
             if early_stopping_name is None: early_stopping_name = 0
             if isinstance(early_stopping_name, int):
-                list_vals = list(self.evals_result.get("valid_0").values())[early_stopping_name]
+                dictwk    = self.evals_result.get("valid_0")
+                list_vals = dictwk[list(dictwk.keys())[early_stopping_name]]
             else:
                 list_vals = self.evals_result.get("valid_0")[early_stopping_name]
-            self.best_iteration  = int(np.argmin(np.array(list_vals)))
+            self.best_iteration  = self.booster.best_iteration
             self.total_iteration = len(list_vals)
-            LOGGER.info(f"best iteration is {self.best_iteration}.")
+            LOGGER.info(f"best iteration is {self.best_iteration}. # 0 means maximum iteration is selected.")
         if self.mode == "lgb": self.booster.__class__ = KkTracer
         # additional prosessing for custom loss
         if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
@@ -173,16 +180,19 @@ class KkGBDT:
         LOGGER.info("END")
     def set_parameter_after_training(self):
         if self.mode == "xgb":
-            self.feature_importances_ = self.booster.get_fscore()
+            dictwk = {f"f{i}": 0 for i in range(self.booster.num_features())}
+            dictwk = dictwk | self.booster.get_fscore()
+            self.feature_importances = list(dictwk.values())
         else:
-            self.feature_importances_ = self.booster.feature_importance()
+            self.feature_importances = self.booster.feature_importance().tolist()
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, iteration_at: int=None, **kwargs):
         LOGGER.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
         output = self.predict_func(input, *args, iteration_at=iteration_at, **kwargs)
         if hasattr(self, "inference") and self.inference is not None:
             LOGGER.info("extra inference for output...")
             output = self.inference(output)
-        if is_softmax is None: is_softmax = self.is_softmax
+        if is_softmax is None:
+            is_softmax = self.is_softmax
         if is_softmax is not None and is_softmax:
             LOGGER.info("softmax output...")
             if len(output.shape) == 1:
@@ -207,6 +217,34 @@ class KkGBDT:
         output = self.booster.predict(input, *args, num_iteration=iteration_at, **kwargs)
         LOGGER.info("END")
         return output
+    def dump(self):
+        LOGGER.info("START")
+        if self.mode == "xgb":
+            str_model = base64.b64encode(self.booster.save_raw()).decode('ascii')
+        else:
+            str_model = self.booster.model_to_string()
+        LOGGER.info("END")
+        return json.dumps(self.to_dict() | {"model": str_model}, indent=4)
+    @classmethod
+    def load(cls, json_model: str | dict):
+        LOGGER.info("START")
+        if isinstance(json_model, str):
+            json_model = json.loads(json_model)
+        if json_model["mode"] == "xgb":
+            booster = xgb.Booster(model_file=bytearray(base64.b64decode(json_model["model"])))
+        else:
+            booster = lgb.Booster(model_str=json_model["model"])
+        ins = cls(1, mode=json_model["mode"])
+        ins.booster = booster
+        for x, y in json_model.items():
+            if x in ["model", "loss"]: continue
+            setattr(ins, x, y)
+        if isinstance(json_model["loss"], dict):
+            ins.loss = Loss.from_dict(json_model["loss"])
+        else:
+            ins.loss = json_model["loss"]
+        LOGGER.info("END")
+        return ins
 
 
 def train_xgb(
@@ -220,7 +258,8 @@ def train_xgb(
     early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
     # option
-    sample_weight: None | np.ndarray=None, categorical_features: list[int]=None
+    sample_weight: None | np.ndarray=None, categorical_features: list[int]=None,
+    group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None, # These are not used in xgb.
 ):
     """
     Params::
@@ -354,7 +393,8 @@ def train_lgb(
     early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
     # option
-    sample_weight: None | np.ndarray=None, categorical_features: list[int]=None
+    sample_weight: None | np.ndarray=None, categorical_features: list[int]=None,
+    group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None, 
 ):
     """
     Params::
@@ -392,9 +432,20 @@ def train_lgb(
         assert check_type_list(categorical_features, int)
     else:
         categorical_features = "auto"
+    if group_train is not None and len(x_valid) > 0:
+        assert group_valid is not None
+        if isinstance(group_valid, np.ndarray):
+            group_valid = [group_valid, ]
+        assert check_type_list(group_valid, np.ndarray)
+        assert len(group_valid) == len(x_valid)
+    else:
+        group_valid = [None, ] * len(x_valid)
     # set dataset
-    dataset_train = DatasetLGB(x_train, label=y_train, weight=sample_weight, categorical_feature=categorical_features, params={"verbosity": params["verbosity"]})
-    dataset_valid = [dataset_train] + [DatasetLGB(_x_valid, label=_y_valid, params={"verbosity": params["verbosity"]}) for _x_valid, _y_valid in zip(x_valid, y_valid)]
+    dataset_train = DatasetLGB(x_train, label=y_train, weight=sample_weight, group=group_train, categorical_feature=categorical_features, params={"verbosity": params["verbosity"]})
+    dataset_valid = [dataset_train] + [
+        DatasetLGB(_x_valid, label=_y_valid, group=_group_valid, params={"verbosity": params["verbosity"]})
+        for _x_valid, _y_valid, _group_valid in zip(x_valid, y_valid, group_valid)
+    ]
     # loss setting
     _loss_func_eval = None
     params["metric"] = []
@@ -424,19 +475,7 @@ def train_lgb(
         assert check_type(early_stopping_name, [int, str])
         if isinstance(early_stopping_name, int):
             assert (early_stopping_name >= 0) and (loss_func_eval is not None) 
-            metric_name = loss_func_eval[early_stopping_name]
-            if isinstance(metric_name, Loss):
-                metric_name = metric_name.name
-            else:
-                dict_conv = {
-                    "multiclass": "multi_logloss",
-                    "binary": "binary_logloss",
-                }
-                if metric_name in dict_conv:
-                    metric_name = dict_conv[metric_name]
-        else:
-            metric_name = early_stopping_name
-        callbacks.append(callback_best_iter(dict_eval_best, early_stopping_rounds, metric_name))
+        callbacks.append(callback_best_iter(dict_eval_best, early_stopping_rounds, early_stopping_name))
     ## train stopping ( triggered by eval value is too low or training step time is too slow ) 
     if train_stopping_val is not None or train_stopping_time is not None:
         assert train_stopping_val  is None or check_type(train_stopping_val,  [int, float])

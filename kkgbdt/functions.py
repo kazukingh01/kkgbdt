@@ -8,6 +8,7 @@ __all__ = [
     "mae",
     "sort_group_id",
     "evaluate_ndcg",
+    "log_loss",
 ]
 
 
@@ -15,7 +16,8 @@ def softmax(x):
     """
     The code without njit is faster than with njit
     """
-    exp_x = np.exp(x)
+    shift_x   = x - np.max(x, axis=-1, keepdims=True) # To avoid overflow encountered in exp
+    exp_x     = np.exp(shift_x)
     sum_exp_x = np.sum(exp_x, axis=-1, keepdims=True)
     return exp_x / sum_exp_x
 
@@ -87,3 +89,10 @@ def evaluate_ndcg(ranks_pred: np.ndarray, ranks_answer: np.ndarray, points_answe
         dcg_i = p_answer[:, 0] + (p_answer[:, 1:k] / ndf[:, 1:k]).sum(axis=-1)
         dcg   = p_pred[  :, 0] + (p_pred[  :, 1:k] / ndf[:, 1:k]).sum(axis=-1)
         return dcg / dcg_i
+
+def log_loss(y: np.ndarray, x: np.ndarray):
+    assert isinstance(y, np.ndarray) and len(y.shape) == 1
+    assert isinstance(x, np.ndarray) and len(x.shape) == 2
+    assert y.dtype in [int, np.int8, np.int16, np.int32, np.int64]
+    ndf = x[np.arange(x.shape[0]), y]
+    return (-1 * np.log(ndf)).mean()

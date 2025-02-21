@@ -1,12 +1,13 @@
 import numpy as np
 import xgboost as xgb
 from functools import partial
-from scipy.misc import derivative
+from findiff import FinDiff
 from scipy.stats import norm
-from kkgbdt.dataset import DatasetLGB
+# local package
 from kklogger import set_logger
-from .numpy import sigmoid, softmax
+from .functions import sigmoid, softmax
 from .com import check_type_list, check_type
+from .dataset import DatasetLGB
 
 
 LOGGER = set_logger(__name__)
@@ -56,6 +57,8 @@ class Loss:
         self.is_higher_better = is_higher_better
     def __str__(self):
         return f"{self.__class__.__name__}({self.name})"
+    def __repr__(self):
+        return self.__str__()
     def convert(self, x: np.ndarray, t: np.ndarray):
         if self.is_check:
             self.check(x, t)
@@ -76,6 +79,19 @@ class Loss:
         raise NotImplementedError
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         raise NotImplementedError
+    def to_dict(self):
+        return {
+            "__class__": self.__class__.__name__,
+            "name": self.name,
+            "n_classes": self.n_classes,
+            "reduction": {np.mean: "mean", np.sum: "sum"}[self.reduction],
+            "is_higher_better": self.is_higher_better
+        }
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        assert "__class__" in json_model
+        _class = globals()[json_model["__class__"]]
+        return _class.from_dict(json_model)
 
 
 class LGBCustomObjective:
@@ -174,13 +190,17 @@ class LGBCustomEval(LGBCustomObjective):
 
 
 def calc_grad_hess(x: np.ndarray, t: np.ndarray, loss_func=None, dx=1e-6, **kwargs):
-    grad = derivative(lambda _x: loss_func(_x, t, **kwargs), x, n=1, dx=dx)
-    hess = derivative(lambda _x: loss_func(_x, t, **kwargs), x, n=2, dx=dx)
+    xs = np.array([x - dx, x, x + dx])
+    f_vals = np.array([loss_func(xi, t, **kwargs) for xi in xs])
+    d1 = FinDiff(0, dx, 1, acc=2)  # 中央差分（2次精度）
+    d2 = FinDiff(0, dx, 2, acc=2)
+    grad = d1(f_vals)[1]
+    hess = d2(f_vals)[1]    
     return grad, hess
 
 
 class BinaryCrossEntropyLoss(Loss):
-    def __init__(self, dx: float=0):
+    def __init__(self, dx: float=1e-7):
         """
         Params::
             dx: Log loss is undefined for p=0 or p=1, so probabilities are
@@ -207,10 +227,14 @@ class BinaryCrossEntropyLoss(Loss):
         grad = x - t
         hess = (1 - x) * x
         return grad, hess
-
+    def to_dict(self):
+        return super().to_dict() | {"dx": self.dx}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(dx=json_model["dx"])
 
 class CrossEntropyLoss(Loss):
-    def __init__(self, n_classes: int, dx: float=0):
+    def __init__(self, n_classes: int, dx: float=1e-7):
         assert isinstance(n_classes, int) and n_classes > 1
         assert check_type(dx, [float, int]) and dx >= 0.0 and dx < 1.0
         super().__init__("ce", n_classes=n_classes, is_higher_better=False)
@@ -246,10 +270,15 @@ class CrossEntropyLoss(Loss):
         grad   = t_sum2 - t
         hess   = t_sum2 * (1 - x)
         return grad, hess
+    def to_dict(self):
+        return super().to_dict() | {"dx": self.dx}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(json_model["n_classes"], dx=json_model["dx"])
 
 
 class CrossEntropyLossArgmax(Loss):
-    def __init__(self, n_classes: int, dx: float=0):
+    def __init__(self, n_classes: int, dx: float=1e-7):
         assert isinstance(n_classes, int) and n_classes > 1
         assert check_type(dx, [float, int]) and dx >= 0.0 and dx < 1.0
         super().__init__("cemax", n_classes=n_classes, is_higher_better=False)
@@ -281,10 +310,15 @@ class CrossEntropyLossArgmax(Loss):
         return (-1 * np.log(x))
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         raise Exception(f"class: {self.__class__.__name__} doesn't have gradient and hessian.")
+    def to_dict(self):
+        return super().to_dict() | {"dx": self.dx}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(json_model["n_classes"], dx=json_model["dx"])
 
 
 class CategoricalCrossEntropyLoss(CrossEntropyLoss):
-    def __init__(self, n_classes: int, dx: float=0, smoothing: int | float=0):
+    def __init__(self, n_classes: int, dx: float=1e-7, smoothing: int | float=0):
         assert check_type(smoothing, [int, float]) and 0.0 <= smoothing < 1.0
         assert check_type(dx, [float, int]) and dx >= 0.0 and dx < 1.0
         super().__init__(n_classes, dx=dx)
@@ -311,10 +345,15 @@ class CategoricalCrossEntropyLoss(CrossEntropyLoss):
             ndf[t] = 1 - self.smoothing
             t      = ndf.astype(np.float32)
         return x, t
+    def to_dict(self):
+        return super().to_dict() | {"dx": self.dx, "smoothing": self.smoothing}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(json_model["n_classes"], dx=json_model["dx"], smoothing=json_model["smoothing"])
 
 
 class FocalLoss(Loss):
-    def __init__(self, n_classes: int, gamma: float=1.0, dx: float=0):
+    def __init__(self, n_classes: int, gamma: float=1.0, dx: float=1e-7):
         assert isinstance(n_classes, int) and n_classes > 1
         assert isinstance(gamma, float) and gamma >= 0
         assert check_type(dx, [float, int]) and dx >= 0.0 and dx < 1.0
@@ -359,6 +398,11 @@ class FocalLoss(Loss):
         )
         hess[t] = (yk * yk_p3 * (self.gamma * yk_log * (1 - yk - yk_p0) + 1 - yk - 2 * yk_p0 + 2 * self.gamma)).reshape(-1)
         return grad, hess
+    def to_dict(self):
+        return super().to_dict() | {"dx": self.dx, "gamma": self.gamma}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(json_model["n_classes"], gamma=json_model["gamma"], dx=json_model["dx"])
 
 
 class MSELoss(Loss):
@@ -373,6 +417,9 @@ class MSELoss(Loss):
         grad = x - t
         hess = np.ones(x.shape, dtype=np.float32)
         return grad, hess
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(n_classes=json_model["n_classes"])
 
 
 class MAELoss(Loss):
@@ -384,7 +431,9 @@ class MAELoss(Loss):
         return np.abs(x - t)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         raise Exception(f"class: {self.__class__.__name__} doesn't have hessian.")
-
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(n_classes=json_model["n_classes"])
 
 class Accuracy(Loss):
     def __init__(self, top_k: int=1):
@@ -417,6 +466,11 @@ class Accuracy(Loss):
         return (x == t.reshape(-1, 1)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         raise Exception(f"class: {self.__class__.__name__} doesn't have gradient and hessian.")
+    def to_dict(self):
+        return super().to_dict() | {"top_k": self.top_k}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(top_k=json_model["top_k"])
 
 
 class LogitMarginL1Loss(Loss):
@@ -479,6 +533,11 @@ class LogitMarginL1Loss(Loss):
         grad   = t_sum2 - t + (self.alpha * x_margin)
         hess   = t_sum2 * (1 - x)
         return grad, hess
+    def to_dict(self):
+        return super().to_dict() | {"alpha": self.alpha, "margin": self.margin, "dx": self.dx}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(json_model["n_classes"], alpha=json_model["alpha"], margin=json_model["margin"], dx=json_model["dx"])
 
 
 class MultiTaskLoss(Loss):
@@ -516,6 +575,13 @@ class MultiTaskLoss(Loss):
             list_grad.append(grad)
             list_hess.append(hess)
         return np.concatenate(list_grad, axis=1), np.concatenate(list_hess, axis=1)
+    def to_dict(self):
+        return super().to_dict() | {"losses": [x.to_dict() for x in self.losses], "weight": self.weight}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        losses = [Loss.from_dict(x) for x in json_model["losses"]]
+        weight = json_model["weight"]
+        return cls(losses, weight)
 
 
 class MultiTaskEvalLoss(Loss):
@@ -538,6 +604,13 @@ class MultiTaskEvalLoss(Loss):
         return self.loss_func.loss(x, t)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         raise Exception(f"class: {self.__class__.__name__} doesn't have gradient and hessian.")
+    def to_dict(self):
+        return super().to_dict() | {"loss_func": self.loss_func.to_dict(), "indexes_loss": self.indexes_loss}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        loss_func    = Loss.from_dict(json_model["loss_func"])
+        indexes_loss = json_model["indexes_loss"]
+        return cls(loss_func, indexes_loss)
 
 
 class CrossEntropyNDCGLoss(Loss):
@@ -578,10 +651,15 @@ class CrossEntropyNDCGLoss(Loss):
     @classmethod
     def NDCG(cls, x: np.ndarray, t: np.ndarray):
         return __class__.DCG(x, t) / __class__.DCG(t, t)
+    def to_dict(self):
+        return super().to_dict() | {"eta": self.eta}
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(json_model["n_classes"], eta=json_model["eta"])
 
 
 class DensitySoftmax(Loss):
-    def __init__(self, n_input: int, n_classes: int, learning_rate: float=1e-2, dx: float=1e-10, maxsmpl: int=10000, epoch: int=100):
+    def __init__(self, n_input: int, n_classes: int, learning_rate: float=1e-2, dx: float=1e-7, maxsmpl: int=10000, epoch: int=100):
         """
         https://arxiv.org/abs/2302.06495
         https://hackmd.io/4VuiVOA4SfisvylasPdiAA

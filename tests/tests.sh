@@ -3,10 +3,12 @@ set -eu
 
 python train_lgb_cls.py
 python train_lgb_reg.py
+python train_lgb_rank.py
 python train_xgb_cls.py
 python train_xgb_reg.py
 python tune_lgb_parameter.py
 python tune_xgb_parameter.py
+python test_dumpload.py
 
 # it's not supported
 python train_lgb_multi_task.py

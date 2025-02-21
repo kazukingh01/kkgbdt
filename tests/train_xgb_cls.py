@@ -6,8 +6,8 @@ from sklearn.datasets import fetch_covtype
 from kkgbdt.model import KkGBDT, set_all_loglevel
 from kkgbdt.loss import CategoricalCrossEntropyLoss, CrossEntropyLoss, Accuracy, FocalLoss, \
     CrossEntropyLossArgmax, BinaryCrossEntropyLoss, CrossEntropyNDCGLoss, LogitMarginL1Loss
+from kkgbdt.functions import log_loss
 from kklogger import set_logger
-from train_lgb_cls import log_loss
 
 
 np.random.seed(0)

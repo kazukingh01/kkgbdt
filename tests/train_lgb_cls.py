@@ -6,19 +6,12 @@ from sklearn.datasets import fetch_covtype
 from kkgbdt.model import KkGBDT
 from kkgbdt.loss import CategoricalCrossEntropyLoss, CrossEntropyLoss, Accuracy, FocalLoss, \
     CrossEntropyLossArgmax, BinaryCrossEntropyLoss, CrossEntropyNDCGLoss, LogitMarginL1Loss
+from kkgbdt.functions import log_loss
 from kklogger import set_logger
 
 
 np.random.seed(0)
 LOGGER = set_logger(__name__)
-
-
-def log_loss(y: np.ndarray, x: np.ndarray):
-    assert isinstance(y, np.ndarray) and len(y.shape) == 1
-    assert isinstance(x, np.ndarray) and len(x.shape) == 2
-    assert y.dtype in [int, np.int8, np.int16, np.int32, np.int64]
-    ndf = x[np.arange(x.shape[0]), y]
-    return (-1 * np.log(ndf)).mean()
 
 
 if __name__ == "__main__":

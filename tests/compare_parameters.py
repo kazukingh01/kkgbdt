@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from sklearn.datasets import fetch_covtype 
 from kkgbdt.model import KkGBDT
+from kkgbdt.functions import log_loss
+np.random.seed(0)
 
 
 PARAMS_FIX = {
@@ -21,14 +23,6 @@ PARAMS_FIX = {
     "colsample_bytree": 0.5,
     "path_smooth": 0.0,
 }
-
-
-def log_loss(y: np.ndarray, x: np.ndarray):
-    assert isinstance(y, np.ndarray) and len(y.shape) == 1
-    assert isinstance(x, np.ndarray) and len(x.shape) == 2
-    assert y.dtype in [int, np.int8, np.int16, np.int32, np.int64]
-    ndf = x[np.arange(x.shape[0]), y]
-    return (-1 * np.log(ndf)).mean()
 
 
 if __name__ == "__main__":
@@ -64,8 +58,8 @@ if __name__ == "__main__":
     for max_bin in [32, 64, 128, 256]:
         for num_leaves in [50, 100, 200]:
             for max_depth in [-1, 6, 12]:
-                for num_grad_quant_bins in [0, 4, 8, 16]:
-                    for random_seed in range(10):
+                for num_grad_quant_bins in [0, ]: # Temporarily, grad quant mode cannot be used [0, 4, 8, 16]
+                    for random_seed in range(5):
                         for mode in ["xgb", "lgb"]:
                             list_params.append(
                                 {"max_bin": max_bin, "num_leaves": num_leaves, "max_depth": max_depth, "mode": mode, "num_grad_quant_bins": num_grad_quant_bins, "random_seed": random_seed}
