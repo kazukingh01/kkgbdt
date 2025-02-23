@@ -69,19 +69,6 @@ class KkGBDT:
             self.predict_func = self.predict_lgb
         LOGGER.info(f"params: {self.params}")
         LOGGER.info("END")
-    def to_dict(self):
-        return {
-            "mode": self.mode,
-            "classes_": self.classes_,
-            "loss": self.loss.to_dict() if isinstance(self.loss, Loss) else str(self.loss),
-            "params": self.params,
-            "params_pkg": self.params_pkg,
-            "is_softmax": self.is_softmax,
-            "best_iteration": self.best_iteration,
-            "total_iteration": self.total_iteration,
-            "time_train": self.time_train,
-            "feature_importances": self.feature_importances,
-        }
     def __str__ (self):
         return f"{self.__class__.__name__}({self.mode}, iters={self.total_iteration}, best={self.best_iteration}, loss={self.loss})"
     def __repr__(self):
@@ -160,17 +147,11 @@ class KkGBDT:
         else:
             self.params_pkg = copy.deepcopy(self.booster.params)
         # best iteration
-        if self.evals_result.get("valid_0") is not None:
-            if early_stopping_name is None: early_stopping_name = 0
-            if isinstance(early_stopping_name, int):
-                dictwk    = self.evals_result.get("valid_0")
-                list_vals = dictwk[list(dictwk.keys())[early_stopping_name]]
-            else:
-                list_vals = self.evals_result.get("valid_0")[early_stopping_name]
-            self.best_iteration  = self.booster.best_iteration
-            self.total_iteration = len(list_vals)
-            LOGGER.info(f"best iteration is {self.best_iteration}. # 0 means maximum iteration is selected.")
-        if self.mode == "lgb": self.booster.__class__ = KkTracer
+        dictwk = self.evals_result["train"]
+        self.total_iteration = len(dictwk.get(list(dictwk.keys())[0]))
+        self.best_iteration  = self.booster.best_iteration # This is counted from 0
+        if self.mode == "xgb": self.total_iteration += -1
+        LOGGER.info(f"best iteration is {self.best_iteration}. # 0 means maximum iteration is selected.")
         # additional prosessing for custom loss
         if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
             output = self.predict_func(x_train)
@@ -217,32 +198,50 @@ class KkGBDT:
         output = self.booster.predict(input, *args, num_iteration=iteration_at, **kwargs)
         LOGGER.info("END")
         return output
-    def to_json(self):
-        LOGGER.info("START")
+    def to_dict(self) -> dict:
         if self.mode == "xgb":
             str_model = base64.b64encode(self.booster.save_raw()).decode('ascii')
         else:
             str_model = self.booster.model_to_string()
-        LOGGER.info("END")
-        return json.dumps(self.to_dict() | {"model": str_model}, indent=4)
+        return {
+            "mode": self.mode,
+            "model": str_model,
+            "classes_": self.classes_,
+            "loss": self.loss.to_dict() if isinstance(self.loss, Loss) else str(self.loss),
+            "params": self.params,
+            "params_pkg": self.params_pkg,
+            "is_softmax": self.is_softmax,
+            "best_iteration": self.best_iteration,
+            "total_iteration": self.total_iteration,
+            "time_train": self.time_train,
+            "feature_importances": self.feature_importances,
+        }
+    def to_json(self, indent: int=None):
+        return json.dumps(self.to_dict(), indent=indent)
     @classmethod
-    def load_from_json(cls, json_model: str | dict):
+    def from_dict(cls, dict_model: dict):
         LOGGER.info("START")
-        if isinstance(json_model, str):
-            json_model = json.loads(json_model)
-        if json_model["mode"] == "xgb":
-            booster = xgb.Booster(model_file=bytearray(base64.b64decode(json_model["model"])))
+        assert isinstance(dict_model, dict)
+        if dict_model["mode"] == "xgb":
+            booster = xgb.Booster(model_file=bytearray(base64.b64decode(dict_model["model"])))
         else:
-            booster = lgb.Booster(model_str=json_model["model"])
-        ins = cls(1, mode=json_model["mode"])
+            booster = lgb.Booster(model_str=dict_model["model"])
+        ins = cls(1, mode=dict_model["mode"])
         ins.booster = booster
-        for x, y in json_model.items():
+        for x, y in dict_model.items():
             if x in ["model", "loss"]: continue
             setattr(ins, x, y)
-        if isinstance(json_model["loss"], dict):
-            ins.loss = Loss.from_dict(json_model["loss"])
+        if isinstance(dict_model["loss"], dict):
+            ins.loss = Loss.from_dict(dict_model["loss"])
         else:
-            ins.loss = json_model["loss"]
+            ins.loss = dict_model["loss"]
+        LOGGER.info("END")
+        return ins
+    @classmethod
+    def load_from_json(cls, json_model: str):
+        LOGGER.info("START")
+        assert isinstance(json_model, str)
+        ins = cls.from_dict(json.loads(json_model))
         LOGGER.info("END")
         return ins
 
