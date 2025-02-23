@@ -31,7 +31,7 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass", Accuracy(top_k=2)], sample_weight="balanced",
         early_stopping_rounds=20, early_stopping_name=0,
     )
-    ins       = KkGBDT.load(model.dump())
+    ins       = KkGBDT.load_from_json(model.to_json())
     ndf_pred1 = model.predict(valid_x)
     ndf_pred2 = ins.predict(valid_x)
     assert np.allclose(ndf_pred1, ndf_pred2)
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class), Accuracy(top_k=2)],
         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
     )
-    ins       = KkGBDT.load(model.dump())
+    ins       = KkGBDT.load_from_json(model.to_json())
     ndf_pred1 = model.predict(valid_x)
     ndf_pred2 = ins.predict(valid_x)
     assert np.allclose(ndf_pred1, ndf_pred2)
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["mlogloss", Accuracy(top_k=2)], sample_weight="balanced",
         early_stopping_rounds=20, early_stopping_name=0,
     )
-    ins       = KkGBDT.load(model.dump())
+    ins       = KkGBDT.load_from_json(model.to_json())
     ndf_pred1 = model.predict(valid_x, is_softmax=True)
     ndf_pred2 = ins.predict(valid_x, is_softmax=True)
     assert np.allclose(ndf_pred1, ndf_pred2)
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(valid_x)
-    ins       = KkGBDT.load(model.dump())
+    ins       = KkGBDT.load_from_json(model.to_json())
     ndf_pred1 = model.predict(valid_x)
     ndf_pred2 = ins.predict(valid_x)
     assert np.allclose(ndf_pred1, ndf_pred2)

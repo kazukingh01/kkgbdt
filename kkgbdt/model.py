@@ -7,13 +7,13 @@ import lightgbm as lgb
 from xgboost.callback import EarlyStopping
 from lightgbm.callback import record_evaluation
 # local package
-from kklogger import set_logger, set_loglevel, LoggingNameException
 from .loss import Loss, LGBCustomObjective, LGBCustomEval
 from .dataset import DatasetLGB
 from .trace import KkTracer
 from .callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
 from .functions import softmax, sigmoid
 from .com import check_type, check_type_list
+from kklogger import set_logger, set_loglevel, LoggingNameException
 
 
 LOGGER = set_logger(__name__)
@@ -217,7 +217,7 @@ class KkGBDT:
         output = self.booster.predict(input, *args, num_iteration=iteration_at, **kwargs)
         LOGGER.info("END")
         return output
-    def dump(self):
+    def to_json(self):
         LOGGER.info("START")
         if self.mode == "xgb":
             str_model = base64.b64encode(self.booster.save_raw()).decode('ascii')
@@ -226,7 +226,7 @@ class KkGBDT:
         LOGGER.info("END")
         return json.dumps(self.to_dict() | {"model": str_model}, indent=4)
     @classmethod
-    def load(cls, json_model: str | dict):
+    def load_from_json(cls, json_model: str | dict):
         LOGGER.info("START")
         if isinstance(json_model, str):
             json_model = json.loads(json_model)
