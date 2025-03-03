@@ -15,12 +15,13 @@ LOGGER = set_logger(__name__)
 
 
 def tune_parameter(
-    trial, mode: str="xgb", num_class: int=None, n_jobs: int=1, eval_string: str=None,
+    trial, mode: str="xgb", num_class: int=None, n_jobs: int=1, eval_string: str=None, eval_string_dict: dict[str, object]={},
     x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: str | Loss=None, num_iterations: int=None,
     x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
     loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
     train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
     sample_weight: str | np.ndarray=None, categorical_features: list[int]=None,
+    group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None,
     params_const = {
         "learning_rate"    : 0.03,
         "num_leaves"       : 100,
@@ -35,13 +36,13 @@ def tune_parameter(
         "min_data_in_bin"  : 5,
     },
     params_search='''{
-        "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
+        "min_child_weight" : trial.suggest_float("min_child_weight", 1e-5, 1e3, log=True),
         "colsample_bytree" : trial.suggest_float("colsample_bytree", 0.001, 0.5),
-        "reg_alpha"        : trial.suggest_float("reg_alpha",  1e-4, 1e3, log=True),
-        "reg_lambda"       : trial.suggest_float("reg_lambda", 1e-4, 1e3, log=True),
+        "reg_alpha"        : trial.suggest_float("reg_alpha",  1e-8, 1e3, log=True),
+        "reg_lambda"       : trial.suggest_float("reg_lambda", 1e-8, 1e3, log=True),
         "min_split_gain"   : trial.suggest_float("min_split_gain", 1e-10, 1.0, log=True),
         "min_child_samples": trial.suggest_int("min_child_samples", 2, 200),
-        "path_smooth"      : trial.suggest_float("path_smooth", 1e-4, 1e2, log=True),
+        "path_smooth"      : trial.suggest_float("path_smooth", 1e-8, 1e2, log=True),
     }'''
 ):
     """
@@ -65,6 +66,7 @@ def tune_parameter(
     """
     LOGGER.info("START")
     assert isinstance(eval_string, str)
+    assert isinstance(eval_string_dict, dict)
     assert isinstance(x_train, np.ndarray)
     assert isinstance(y_train, np.ndarray)
     assert loss_func is not None
@@ -80,6 +82,7 @@ def tune_parameter(
         train_stopping_val=train_stopping_val, train_stopping_rounds=train_stopping_rounds, 
         train_stopping_is_over=train_stopping_is_over, train_stopping_time=train_stopping_time,
         sample_weight=sample_weight, categorical_features=categorical_features,
+        group_train=group_train, group_valid=group_valid,
     )
     LOGGER.info("END")
-    return eval(eval_string, {}, {"model": model, "np": np})
+    return eval(eval_string, {}, (eval_string_dict | {"model": model, "np": np, "_x_valid": x_valid, "_y_valid": y_valid, "_group_valid": group_valid}))
