@@ -10,9 +10,9 @@ python tune_lgb_parameter.py
 python tune_xgb_parameter.py
 python test_dumpload.py
 
-# it's not supported
-python train_lgb_multi_task.py
-python train_lgb_tree_structure.py
+# # it's not supported
+# python train_lgb_multi_task.py
+# python train_lgb_tree_structure.py
 
 # it's for GPU
 # python train_xgb_cls_gpu.py

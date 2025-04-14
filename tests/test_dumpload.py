@@ -1,4 +1,4 @@
-import json
+import importlib
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multiclass", Accuracy(top_k=2)], sample_weight="balanced",
         early_stopping_rounds=20, early_stopping_name=0,
     )
-    ins       = KkGBDT.load_from_json(model.to_json())
+    ins       = KkGBDT.from_json(model.to_json())
     ndf_pred1 = model.predict(valid_x)
     ndf_pred2 = ins.predict(valid_x)
     assert np.allclose(ndf_pred1, ndf_pred2)
@@ -44,20 +44,32 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class), Accuracy(top_k=2)],
         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
     )
-    ins       = KkGBDT.load_from_json(model.to_json())
+    ins       = KkGBDT.from_json(model.to_json())
+    ndf_pred1 = model.predict(valid_x)
+    ndf_pred2 = ins.predict(valid_x)
+    assert np.allclose(ndf_pred1, ndf_pred2)
+    assert model.to_dict() == ins.to_dict()
+
+    # dump with loader
+    del KkGBDT
+    dictwk = model.dump_with_loader()
+    _path, _cls = dictwk["__class__"].rsplit(".", 1)
+    _cls = getattr(importlib.import_module(_path), _cls)
+    ins  = getattr(_cls, dictwk["__loader__"])(dictwk["__dump_string__"])
     ndf_pred1 = model.predict(valid_x)
     ndf_pred2 = ins.predict(valid_x)
     assert np.allclose(ndf_pred1, ndf_pred2)
     assert model.to_dict() == ins.to_dict()
 
     # xgb normal loss
+    from kkgbdt.model import KkGBDT
     model   = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
         train_x, train_y, loss_func="multi:softmax", num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["mlogloss", Accuracy(top_k=2)], sample_weight="balanced",
         early_stopping_rounds=20, early_stopping_name=0,
     )
-    ins       = KkGBDT.load_from_json(model.to_json())
+    ins       = KkGBDT.from_json(model.to_json())
     ndf_pred1 = model.predict(valid_x, is_softmax=True)
     ndf_pred2 = ins.predict(valid_x, is_softmax=True)
     assert np.allclose(ndf_pred1, ndf_pred2)
@@ -71,7 +83,18 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(valid_x)
-    ins       = KkGBDT.load_from_json(model.to_json())
+    ins       = KkGBDT.from_json(model.to_json())
+    ndf_pred1 = model.predict(valid_x)
+    ndf_pred2 = ins.predict(valid_x)
+    assert np.allclose(ndf_pred1, ndf_pred2)
+    assert model.to_dict() == ins.to_dict()
+
+    # dump with loader
+    del KkGBDT
+    dictwk = model.dump_with_loader()
+    _path, _cls = dictwk["__class__"].rsplit(".", 1)
+    _cls = getattr(importlib.import_module(_path), _cls)
+    ins  = getattr(_cls, dictwk["__loader__"])(dictwk["__dump_string__"])
     ndf_pred1 = model.predict(valid_x)
     ndf_pred2 = ins.predict(valid_x)
     assert np.allclose(ndf_pred1, ndf_pred2)

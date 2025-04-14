@@ -9,7 +9,6 @@ from lightgbm.callback import record_evaluation
 # local package
 from .loss import Loss, LGBCustomObjective, LGBCustomEval
 from .dataset import DatasetLGB
-from .trace import KkTracer
 from .callbacks import PrintEvalation, TrainStopping, log_evaluation, callback_stop_training, callback_best_iter
 from .functions import softmax, sigmoid
 from .com import check_type, check_type_list
@@ -238,12 +237,18 @@ class KkGBDT:
         LOGGER.info("END")
         return ins
     @classmethod
-    def load_from_json(cls, json_model: str):
+    def from_json(cls, json_model: str):
         LOGGER.info("START")
         assert isinstance(json_model, str)
         ins = cls.from_dict(json.loads(json_model))
         LOGGER.info("END")
         return ins
+    def dump_with_loader(self) -> dict:
+        return {
+            "__class__": "kkgbdt.model.KkGBDT",
+            "__loader__": "from_json",
+            "__dump_string__": self.to_json(indent=4),
+        }
 
 
 def train_xgb(
