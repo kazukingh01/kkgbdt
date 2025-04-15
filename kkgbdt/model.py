@@ -204,7 +204,6 @@ class KkGBDT:
             str_model = self.booster.model_to_string()
         return {
             "mode": self.mode,
-            "model": str_model,
             "classes_": self.classes_,
             "loss": self.loss.to_dict() if isinstance(self.loss, Loss) else str(self.loss),
             "params": self.params,
@@ -214,6 +213,7 @@ class KkGBDT:
             "total_iteration": self.total_iteration,
             "time_train": self.time_train,
             "feature_importances": self.feature_importances,
+            "model": str_model, # long text goes last
         }
     def to_json(self, indent: int=None):
         return json.dumps(self.to_dict(), indent=indent)
