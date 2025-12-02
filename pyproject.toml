@@ -5,11 +5,12 @@ requires-python = ">= 3.12.2"
 description = "my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM and XGBoost."
 dependencies = [
     'kklogger @ git+https://github.com/kazukingh01/kklogger.git@f6ddcc099da0102a14a62d67bede1b1c30eaf839',
+    'kktestdata @ git+https://github.com/kazukingh01/kktestdata.git@d2529701bdf7d7630685bd08d2c4fb9d05becc91',
     'pandas==2.2.3',
     'numpy==2.2.1',
     'optuna==4.1.0',
-    'xgboost==1.7.6', # 2.1.3 has bug. The program crashes with the following error when the training with 'multi_output_tree' finishes. "terminate called without an active exception"
-    'lightgbm==4.5.0',
+    'xgboost==3.1.2', # 2.1.3 has bug. The program crashes with the following error when the training with 'multi_output_tree' finishes. "terminate called without an active exception"
+    'lightgbm==4.6.0',
     'scikit-learn==1.5.2',
     'scipy==1.14.1',
     'joblib==1.4.2',
