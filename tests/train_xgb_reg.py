@@ -1,7 +1,7 @@
 import json
 import numpy as np
 import pandas as pd
-from sklearn.datasets import fetch_california_housing
+from kktestdata import DatasetRegistry
 from kkgbdt.model import KkGBDT, set_all_loglevel
 from kkgbdt.loss import MSELoss, MAELoss
 from kklogger import set_logger
@@ -13,15 +13,15 @@ set_all_loglevel("debug")
 
 
 def rmse(y: np.ndarray, x: np.ndarray):
-    return ((x - y) ** 2).mean()
+    return np.sqrt(((x - y) ** 2).mean())
 
 
 if __name__ == "__main__":
-    data    = fetch_california_housing()
-    train_x = data["data"  ][:-data["target"].shape[0]//5 ]
-    train_y = data["target"][:-data["target"].shape[0]//5 ]
-    valid_x = data["data"  ][ -data["target"].shape[0]//5:]
-    valid_y = data["target"][ -data["target"].shape[0]//5:]
+    reg     = DatasetRegistry()
+    dataset = reg.create("diamonds")
+    train_x, train_y, valid_x, valid_y, test_x, test_y = dataset.load_data(
+        format="numpy", split_type="valid", test_size=0.3, valid_size=0.2
+    )
     n_class = 1
     n_iter  = 500
     lr      = 0.05
@@ -40,8 +40,8 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["rmse", MSELoss()], 
         early_stopping_rounds=20, early_stopping_name=0,
     )
-    ndf_pred = model.predict(valid_x, iteration_at=model.best_iteration)
-    valeval["rmse_rmse"] = rmse(valid_y, ndf_pred)
+    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    valeval["rmse_rmse"] = rmse(test_y, ndf_pred)
 
     LOGGER.info("public loss huber", color=["BOLD", "UNDERLINE", "GREEN"])
     model = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
@@ -50,8 +50,8 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["mphe", MSELoss()],
         early_stopping_rounds=20, early_stopping_name=0, 
     )
-    ndf_pred = model.predict(valid_x)
-    valeval["huber_rmse"] = rmse(valid_y, ndf_pred)
+    ndf_pred = model.predict(test_x)
+    valeval["huber_rmse"] = rmse(test_y, ndf_pred)
 
     LOGGER.info("custom loss MSELoss", color=["BOLD", "UNDERLINE", "GREEN"])
     model = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", MAELoss()],
         early_stopping_rounds=20, early_stopping_name=0, 
     )
-    ndf_pred = model.predict(valid_x)
-    valeval["MSELoss_rmse"] = rmse(valid_y, ndf_pred)
+    ndf_pred = model.predict(test_x)
+    valeval["MSELoss_rmse"] = rmse(test_y, ndf_pred)
 
     LOGGER.info(f"{json.dumps({x:float(y) for x, y in valeval.items()}, indent=2)}")
