@@ -1,4 +1,4 @@
-import copy, time, json, base64, json, os, tempfile
+import copy, time, json, base64, json
 import numpy as np
 from typing import Any
 from functools import partial
@@ -6,13 +6,12 @@ from dataclasses import dataclass
 import xgboost as xgb
 import lightgbm as lgb
 import catboost as cat
-from catboost import CatBoostClassifier, CatBoostRegressor, CatBoostRanker
 from xgboost.callback import EarlyStopping
 from lightgbm.callback import record_evaluation
 # local package
 from .check import (
     check_inputs, check_loss_func, check_early_stopping, check_train_stopping, check_other, 
-    check_and_compute_sample_weight, check_groups_for_rank, check_mode, MST_OBJECTIVE
+    check_and_compute_sample_weight, check_groups_for_rank, check_mode, str_loss_to_metric,
 )
 from .loss import Loss, LGBCustomObjective, LGBCustomEval
 from .dataset import DatasetLGB, DatasetCB, create_xgb_dataset_with_group
@@ -97,7 +96,6 @@ class KkGBDT:
         self.loss                = None
         self.inference           = None
         self.booster             = None
-        self.cat_model_type      = None
         if mode == "xgb":
             self.train_func   = _train_xgb
             self.predict_func = self.predict_xgb
@@ -145,6 +143,10 @@ class KkGBDT:
         # check sample weight & convert
         if sample_weight is not None:
             sample_weight = check_and_compute_sample_weight(sample_weight, y_train)
+        # check early stopping
+        if len(x_valid) == 0:
+            assert early_stopping_idx    is None, "Don't set early_stopping_idx when there is no validation data."
+            assert early_stopping_rounds is None, "Don't set early_stopping_rounds when there is no validation data."            
         # check groups for rank
         group_train, group_valid = check_groups_for_rank(group_train, group_valid=group_valid, x_valid=x_valid)
         # training
@@ -172,8 +174,6 @@ class KkGBDT:
             ),
             evals_result=self.evals_result,
         )
-        if self.mode == "cat":
-            self.cat_model_type = self.booster.__class__.__name__
         self.time_train = time.time() - time_start
         # save params
         if self.mode == "xgb":
@@ -181,35 +181,23 @@ class KkGBDT:
         elif self.mode == "lgb":
             self.params_pkg = copy.deepcopy(self.booster.params)
         else:
-            try:
-                params_pkg = self.booster.get_all_params()
-            except Exception:
-                params_pkg = {}
-            try:
-                json.dumps(params_pkg)
-                self.params_pkg = params_pkg
-            except TypeError:
-                self.params_pkg = {x: y for x, y in params_pkg.items() if isinstance(y, (str, int, float, bool, list, dict, type(None)))}
-        # best iteration
-        if self.mode == "cat":
-            self.total_iteration = getattr(self.booster, "tree_count_", num_iterations)
-            best_iter = None
-            try: best_iter = self.booster.get_best_iteration()
-            except Exception: pass
-            if best_iter is None or best_iter < 0:
-                best_iter = self.total_iteration - 1
-            self.best_iteration = best_iter
+            self.params_pkg = copy.deepcopy(self.booster.get_all_params())
+        # total iteration
+        dictwk = self.evals_result.get("train", {})
+        if dictwk:
+            self.total_iteration = len(dictwk.get(list(dictwk.keys())[0]))
         else:
-            dictwk = self.evals_result.get("train", {})
-            if dictwk:
-                self.total_iteration = len(dictwk.get(list(dictwk.keys())[0]))
-            else:
-                self.total_iteration = num_iterations
+            self.total_iteration = num_iterations
+        if self.mode == "xgb":
+            self.total_iteration += -1
+        # best iteration
+        if self.mode in ["xgb", "lgb"]:
             try:
                 self.best_iteration = self.booster.best_iteration # This is counted from 0
             except AttributeError:
                 self.best_iteration = num_iterations
-            if self.mode == "xgb": self.total_iteration += -1
+        else:
+            self.best_iteration = self.booster.get_best_iteration()
         LOGGER.info(f"best iteration is {self.best_iteration}. # 0 means maximum iteration is selected.")
         # additional prosessing for custom loss
         if isinstance(self.loss, Loss) and hasattr(self.loss, "extra_processing"):
@@ -226,7 +214,11 @@ class KkGBDT:
         elif self.mode == "lgb":
             self.feature_importances = self.booster.feature_importance().tolist()
         else:
-            self.feature_importances = self.booster.get_feature_importance().tolist()
+            try:
+                self.feature_importances = self.booster.get_feature_importance().tolist()
+            except cat.CatBoostError as e:
+                LOGGER.warning(f"Error at get_feature_importance(): {e}")
+                self.feature_importances = []
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, iteration_at: int=None, **kwargs):
         LOGGER.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
         output = self.predict_func(input, *args, iteration_at=iteration_at, **kwargs)
@@ -280,15 +272,7 @@ class KkGBDT:
         elif self.mode == "lgb":
             str_model = self.booster.model_to_string()
         else:
-            with tempfile.NamedTemporaryFile(suffix=".cbm", delete=False) as ftmp:
-                tmp_path = ftmp.name
-            try:
-                self.booster.save_model(tmp_path, format="cbm")
-                with open(tmp_path, "rb") as fr:
-                    str_model = base64.b64encode(fr.read()).decode("ascii")
-            finally:
-                try: os.remove(tmp_path)
-                except OSError: pass
+            str_model = base64.b64encode(self.booster._serialize_model()).decode("ascii")
         return {
             "mode": self.mode,
             "classes_": self.classes_,
@@ -300,7 +284,6 @@ class KkGBDT:
             "total_iteration": self.total_iteration,
             "time_train": self.time_train,
             "feature_importances": self.feature_importances,
-            "cat_model_type": self.cat_model_type,
             "model": str_model, # long text goes last
         }
     def to_json(self, indent: int=None):
@@ -314,18 +297,7 @@ class KkGBDT:
         elif dict_model["mode"] == "lgb":
             booster = lgb.Booster(model_str=dict_model["model"])
         else:
-            buffer = base64.b64decode(dict_model["model"])
-            model_type = dict_model.get("cat_model_type", "CatBoostClassifier")
-            model_class = {"CatBoostClassifier": CatBoostClassifier, "CatBoostRegressor": CatBoostRegressor, "CatBoostRanker": CatBoostRanker}.get(model_type, CatBoostClassifier)
-            booster = model_class()
-            with tempfile.NamedTemporaryFile(suffix=".cbm", delete=False) as ftmp:
-                tmp_path = ftmp.name
-                ftmp.write(buffer)
-            try:
-                booster.load_model(tmp_path)
-            finally:
-                try: os.remove(tmp_path)
-                except OSError: pass
+            booster = cat.CatBoost().load_model(blob=bytes(bytearray(base64.b64decode(dict_model["model"]))))
         num_class = len(dict_model.get("classes_", [])) if len(dict_model.get("classes_", [])) > 0 else 1
         ins = cls(num_class, mode=dict_model["mode"])
         ins.booster = booster
@@ -427,12 +399,19 @@ def _train_xgb(p: ParamsTraining, evals_result: dict = None):
         params["objective"] = loss_func
     else:
         custom_loss_func = LGBCustomObjective(loss_func, mode="xgb")
-    for func_eval in loss_func_eval:
-        if isinstance(func_eval, str):
-            params["eval_metric"].append(func_eval)
+    if isinstance(loss_func_eval, list) and len(loss_func_eval) > 0:
+        for func_eval in loss_func_eval:
+            if isinstance(func_eval, str):
+                params["eval_metric"].append(func_eval)
+            else:
+                if custom_loss_func_eval is None: custom_loss_func_eval = []
+                custom_loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
+    else:
+        # xgboost must have at least one eval metric if you want to get logs in callbacks
+        if isinstance(loss_func, str):
+            params["eval_metric"].append(str_loss_to_metric(loss_func, "xgb"))
         else:
-            if custom_loss_func_eval is None: custom_loss_func_eval = []
-            custom_loss_func_eval.append(LGBCustomEval(func_eval, mode="xgb"))
+            custom_loss_func_eval = [LGBCustomEval(loss_func, mode="xgb"), ]
     if custom_loss_func_eval is not None:
         if len(custom_loss_func_eval) > 1:
             LOGGER.warning(f"xgboost's custom metric is supported only one function. so set this metric: {custom_loss_func_eval[0]}")
@@ -602,8 +581,7 @@ def _train_cat(p: ParamsTraining, evals_result: dict = None):
     # callbacks
     params['callbacks'] = create_callbacks_cb()
     # train
-    if isinstance(params["loss_function"], str) and params["loss_function"] not in [MST_OBJECTIVE["multi"]["cat"], ]:
-        params["classes_count"] = None
+    if params["classes_count"] == 1: params["classes_count"] = None
     params = {x: y for x, y in params.items() if y is not None}
     LOGGER.info(f"params: {params}")
     model = cat.train(

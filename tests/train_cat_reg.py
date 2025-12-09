@@ -1,45 +1,81 @@
+import json
 import numpy as np
-from sklearn.datasets import fetch_california_housing
-from kkgbdt.model import KkGBDT
-from kkgbdt.loss import MSELoss
+import pandas as pd
+from kktestdata import DatasetRegistry
+from kkgbdt.model import KkGBDT, set_all_loglevel
+from kkgbdt.loss import MSELoss, MAELoss
 from kklogger import set_logger
-import argparse
 
 
 np.random.seed(0)
 LOGGER = set_logger(__name__)
+set_all_loglevel("debug")
+
+
+def rmse(y: np.ndarray, x: np.ndarray):
+    return np.sqrt(((x - y) ** 2).mean())
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--gpu", action="store_true", help="enable GPU for catboost")
-    args = parser.parse_args()
+    reg     = DatasetRegistry()
+    dataset = reg.create("diamonds")
+    train_x, train_y, valid_x, valid_y, test_x, test_y = dataset.load_data(
+        format="numpy", split_type="valid", test_size=0.3, valid_size=0.2
+    )
+    n_class = 1
+    n_iter  = 100
+    lr      = 0.2
+    max_bin = 64
+    ndepth  = 6
+    valeval = {}
+    LOGGER.info("data train", color=["BOLD", "CYAN"])
+    LOGGER.info(f"\n{pd.Series(train_y).describe()}")
+    LOGGER.info("data valid", color=["BOLD", "CYAN"])
+    LOGGER.info(f"\n{pd.Series(valid_y).describe}")
 
-    data = fetch_california_housing()
-    train_x = data["data"  ][:-data["target"].shape[0]//5 ]
-    train_y = data["target"][:-data["target"].shape[0]//5 ]
-    valid_x = data["data"  ][ -data["target"].shape[0]//5:]
-    valid_y = data["target"][ -data["target"].shape[0]//5:]
-    n_iter  = 150
-    lr      = 0.1
-    max_bin = 128
-    ndepth  = -1
 
-    model = KkGBDT(1, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, is_gpu=args.gpu)
+    LOGGER.info("public loss rmse ( no validation )", color=["BOLD", "UNDERLINE", "GREEN"])
+    model   = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func="RMSE", num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval="RMSE",
-        early_stopping_rounds=20, early_stopping_name=0,
+        train_x, train_y, loss_func="reg", num_iterations=n_iter,
     )
-    pred = model.predict(valid_x, is_softmax=False)
-    LOGGER.info(f"rmse(normal): {np.sqrt(((pred - valid_y) ** 2).mean())}", color=["GREEN", "BOLD"])
+    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
 
-    loss_custom = MSELoss()
-    model_custom = KkGBDT(1, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, is_gpu=args.gpu)
-    model_custom.fit(
-        train_x, train_y, loss_func=loss_custom, num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=[loss_custom],
-        early_stopping_rounds=20, early_stopping_name=0,
+    LOGGER.info("public loss rmse", color=["BOLD", "UNDERLINE", "GREEN"])
+    model   = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model.fit(
+        train_x, train_y, loss_func="reg", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=MSELoss(), 
+        early_stopping_rounds=20, early_stopping_idx=0,
     )
-    pred_custom = model_custom.predict(valid_x, is_softmax=False)
-    LOGGER.info(f"rmse(custom): {np.sqrt(((pred_custom - valid_y) ** 2).mean())}", color=["GREEN", "BOLD"])
+    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.best_iteration < n_iter
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    valeval["rmse_rmse"] = rmse(test_y, ndf_pred)
+
+    LOGGER.info("public loss huber", color=["BOLD", "UNDERLINE", "GREEN"])
+    model = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model.fit(
+        train_x, train_y, loss_func="huber(delta=1)", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y,
+        early_stopping_rounds=20, early_stopping_idx=0, 
+    )
+    ndf_pred = model.predict(test_x)
+    assert model.best_iteration < n_iter
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    valeval["huber_rmse"] = rmse(test_y, ndf_pred)
+
+    LOGGER.info("custom loss MSELoss", color=["BOLD", "UNDERLINE", "GREEN"])
+    model = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model.fit(
+        train_x, train_y, loss_func=MSELoss(), num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", "reg"],
+        early_stopping_rounds=20, early_stopping_idx=0, 
+    )
+    ndf_pred = model.predict(test_x)
+    assert model.best_iteration < n_iter
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    valeval["MSELoss_rmse"] = rmse(test_y, ndf_pred)
+
+    LOGGER.info(f"{json.dumps({x:float(y) for x, y in valeval.items()}, indent=2)}")

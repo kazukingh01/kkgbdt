@@ -22,7 +22,7 @@ MST_METRIC = {
     "multi":  {"xgb": "mlogloss", "lgb": "multi_logloss",  "cat": "MultiClass"},
     "reg":    {"xgb": "rmse",     "lgb": "rmse",           "cat": "RMSE"},
     "huber":  {"xgb": "mphe",     "lgb": "huber",          "cat": "Huber"},
-    "rank":   {"xgb": "ndcg",     "lgb": "ndcg",           "cat": "YetiRank"},
+    "rank":   {"xgb": "ndcg",     "lgb": "ndcg",           "cat": "NDCG"},
     "acc":    {"xgb": None,       "lgb": None,             "cat": "Accuracy"},
     "auc":    {"xgb": "auc",      "lgb": "auc",            "cat": "AUC"},
 }
@@ -57,6 +57,39 @@ def check_inputs(
             assert y_train.shape[-1]  == _y_valid.shape[-1]
     return x_train, y_train, x_valid, y_valid
 
+def str_loss_to_metric(loss_func: str, mode: str) -> str:
+    assert isinstance(loss_func, str)
+    check_mode(mode)
+    _type = None
+    for x, y in MST_OBJECTIVE.items():
+        if y[mode] == loss_func:
+            _type = x
+    assert _type is not None, "loss_func is not found in MST_OBJECTIVE"
+    return MST_METRIC[_type][mode]
+
+def check_loss_string_catboost(loss_func: str, is_metric: bool=False) -> str:
+    """
+    loss_func: huber(delta=1.0,use_weights=false)
+    """
+    assert isinstance(loss_func, str)
+    if "(" in loss_func and ")" in loss_func:
+        _loss   = loss_func.split("(")[0]
+        _params = loss_func.split("(")[1].split(")")[0]
+        _params = ":".join([x.strip() for x in _params.split(",")])
+        if is_metric:
+            assert _loss in MST_METRIC
+            return f"{MST_METRIC[_loss]['cat']}:{_params}"
+        else:
+            assert _loss in MST_OBJECTIVE
+            return f"{MST_OBJECTIVE[_loss]['cat']}:{_params}"
+    else:
+        if is_metric:
+            assert loss_func in MST_METRIC
+            return MST_METRIC[loss_func]['cat']
+        else:
+            assert loss_func in MST_OBJECTIVE
+            return MST_OBJECTIVE[loss_func]['cat']
+
 def check_loss_func(
     loss_func: str | Loss, mode: str, loss_func_eval: str | list[str | Loss] | None = None, x_valid: list[np.ndarray] = None
 ) -> tuple[str | Loss, list[str | Loss]]:
@@ -70,8 +103,11 @@ def check_loss_func(
     _loss_func: str | Loss = None
     _loss_func_eval: list[str | Loss] = None
     if isinstance(loss_func, str):
-        assert loss_func in MST_OBJECTIVE
-        _loss_func = MST_OBJECTIVE[loss_func][mode]
+        if mode == "cat":
+            _loss_func = check_loss_string_catboost(loss_func, is_metric=False)
+        else:
+            assert loss_func in MST_OBJECTIVE
+            _loss_func = MST_OBJECTIVE[loss_func][mode]
     else:
         _loss_func = loss_func
     if loss_func_eval is not None:
@@ -92,8 +128,11 @@ def check_loss_func(
                     assert isinstance(loss_func, Loss)
                     _loss_func_eval.append(copy.deepcopy(loss_func))
                 else:
-                    assert _loss in MST_METRIC
-                    _loss_func_eval.append(MST_METRIC[_loss][mode])
+                    if mode == "cat":
+                        _loss_func_eval.append(check_loss_string_catboost(_loss, is_metric=True))
+                    else:
+                        assert _loss in MST_METRIC
+                        _loss_func_eval.append(MST_METRIC[_loss][mode])
             else:
                 _loss_func_eval.append(copy.deepcopy(_loss))
     else:
@@ -101,7 +140,10 @@ def check_loss_func(
             if isinstance(loss_func, Loss):
                 _loss_func_eval = [copy.deepcopy(loss_func), ]
             else:
-                _loss_func_eval = [MST_METRIC[loss_func][mode], ]
+                if mode == "cat":
+                    _loss_func_eval = [check_loss_string_catboost(loss_func, is_metric=True), ]
+                else:
+                    _loss_func_eval = [MST_METRIC[loss_func][mode], ]
     return _loss_func, _loss_func_eval
 
 def check_early_stopping(

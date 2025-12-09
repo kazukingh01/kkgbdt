@@ -18,7 +18,7 @@ if __name__ == "__main__":
         format="numpy", split_type="valid", test_size=0.3, valid_size=0.2
     )
     n_class = dataset.metadata.n_classes
-    n_iter  = 10
+    n_iter  = 100
     lr      = 0.2
     max_bin = 64
     ndepth  = 6
@@ -36,6 +36,8 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.best_iteration < (n_iter - 1)
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["binary_log"] = BinaryCrossEntropyLoss()(ndf_pred, (test_y == 1).astype(int))
     valeval["binary_acc"] = Accuracy(top_k=1)(ndf_pred, (test_y == 1).astype(int))
 
@@ -47,8 +49,20 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.best_iteration < (n_iter - 1)
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["BinaryCrossEntropyLoss_log"] = BinaryCrossEntropyLoss()(ndf_pred, (test_y == 1).astype(int))
     valeval["BinaryCrossEntropyLoss_acc"] = Accuracy(top_k=1)(ndf_pred, (test_y == 1).astype(int))
+
+    LOGGER.info("public loss multiclass ( no validation )", color=["BOLD", "UNDERLINE", "GREEN"])
+    model   = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model.fit(
+        train_x, train_y, loss_func="multi", num_iterations=n_iter, sample_weight="balanced",
+    )
+    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    valeval["multiclass_log"] = log_loss(test_y, ndf_pred)
+    valeval["multiclass_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
     LOGGER.info("public loss multiclass", color=["BOLD", "UNDERLINE", "GREEN"])
     model   = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
@@ -58,8 +72,12 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.best_iteration < (n_iter - 1)
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["multiclass_log"] = log_loss(test_y, ndf_pred)
     valeval["multiclass_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
+
+    n_iter = 10
 
     LOGGER.info("custom loss CategoryCE", color=["BOLD", "UNDERLINE", "GREEN"])
     model = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
@@ -69,6 +87,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x)
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["CategoryCE_log"] = log_loss(test_y, ndf_pred)
     valeval["CategoryCE_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
@@ -80,5 +99,6 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x)
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["FocalLoss_log"] = log_loss(test_y, ndf_pred)
     valeval["FocalLoss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)

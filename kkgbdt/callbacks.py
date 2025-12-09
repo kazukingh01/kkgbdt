@@ -151,9 +151,12 @@ def create_callbacks_cb():
                 for x, y in info.metrics.items():
                     for a, _ in y.items():
                         if ":" in a:
-                            if x == "learn" and "use_weights=true" in a:
-                                self.indexes.append((x, a))
-                            elif x.startswith("validation") and "use_weights=false" in a:
+                            if "use_weights" in a:
+                                if x == "learn" and "use_weights=true" in a:
+                                    self.indexes.append((x, a))
+                                elif x.startswith("validation") and "use_weights=false" in a:
+                                    self.indexes.append((x, a))
+                            else:
                                 self.indexes.append((x, a))
                         else:
                             self.indexes.append((x, a))

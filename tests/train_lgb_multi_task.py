@@ -4,6 +4,9 @@ from kkgbdt.loss import MultiTaskLoss, CrossEntropyLoss, CrossEntropyNDCGLoss, M
 
 
 if __name__ == "__main__":
+    """
+    Basicaly, it is not recommended to use multi task training.
+    """
     n_class, n_data = 12, 1000
     train_x = np.random.rand(n_data, 100)
     train_y = np.random.rand(n_data, n_class)

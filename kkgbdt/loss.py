@@ -172,15 +172,18 @@ class LGBCustomObjective:
     @classmethod
     def convert_lgb_output(cls, grad: np.ndarray, hess: np.ndarray):
         return grad.T.reshape(-1), hess.T.reshape(-1)
-    def calc_ders_range(self, approxes: np.ndarray, targets: np.ndarray, weights: np.ndarray):
+    def calc_ders_range(self, approxes: np.ndarray, targets: np.ndarray, weights: np.ndarray | None):
         # for catboost
         grad, hess = self.func_loss.gradhess(approxes, targets)
-        grad, hess = weights * grad, weights * hess
+        if weights is not None:
+            grad, hess = grad * weights, hess * weights
         return [(x, y) for x, y in zip(grad, hess)]
-    def calc_ders_multi(self, approxes: np.ndarray, targets: float, weights: float):
+    def calc_ders_multi(self, approxes: np.ndarray, targets: float, weights: float | None):
         # for catboost
         grad, hess = self.func_loss.gradhess_matrix(approxes.reshape(1, -1), np.array([targets]))
-        grad, hess = grad[0] * weights, hess[0] * weights
+        grad, hess = grad[0], hess[0]
+        if weights is not None:
+            grad, hess = grad * weights, hess * weights
         grad, hess = (-1 * grad).tolist(), (-1 * hess).tolist() # -1 is needed for catboost
         return grad, hess
 
@@ -436,14 +439,12 @@ class FocalLoss(Loss):
         g = self.gamma
         if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
         l  = np.log(x)
-        ij = x.reshape(-1, self.n_classes, 1) * x.reshape(-1, 1, self.n_classes)
         A  = g * x * l + x - 1
         B  = (1 - x) ** (g - 1)
+        Z  = A * B
         C  = (t * Z).sum(axis=-1, keepdims=True)
         D  = g / (1 - x) * B * (-1 * A + l - x + 1)
         E  = t * D * x
-        F  = t * D * (x - 1)
-        Z  = A * B
         grad    = t * Z - x * C
         hess_ii = E * (1 - x) * (1 - x) - x * (1 - x) * C + (x ** 2) * (E.sum(axis=-1, keepdims=True) - E)
         return grad, hess_ii
