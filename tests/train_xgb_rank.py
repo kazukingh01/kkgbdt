@@ -16,14 +16,11 @@ if __name__ == '__main__':
         format="numpy", split_type="valid", test_size=0.3, valid_size=0.2
     )
     # training
-    model = KkGBDT(1, mode="lgb", learning_rate=0.1, max_bin=64, max_depth=-1, eval_at=[3, 6])
+    model = KkGBDT(1, mode="xgb", learning_rate=0.1, max_bin=64, max_depth=-1)
     model.fit(
         train_x[:, 1:], train_y, loss_func="rank", num_iterations=200,
-        x_valid=valid_x[:, 1:], y_valid=valid_y, loss_func_eval="rank",
-        early_stopping_rounds=20, early_stopping_idx=1, group_train=train_x[:, 0], group_valid=valid_x[:, 0],
-        categorical_features=(
-            np.where(np.isin(np.array(dataset.metadata.columns_feature), ["player_no", "number", "exhibition_course"]))[0] - 1
-        ).tolist(),
+        x_valid=valid_x[:, 1:], y_valid=valid_y, loss_func_eval=None,
+        early_stopping_rounds=20, early_stopping_idx=0, group_train=train_x[:, 0], group_valid=valid_x[:, 0],
     )
     # evaluation
     ndf_pred = model.predict(test_x[:, 1:])

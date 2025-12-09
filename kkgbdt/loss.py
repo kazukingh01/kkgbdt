@@ -43,8 +43,8 @@ def _sum_reshape(x): return x.sum(axis=1).reshape(-1, 1)
 
 class Loss:
     def __init__(
-            self, name: str, n_classes: int=1, reduction: str="mean", is_higher_better: bool=False
-        ):
+        self, name: str, n_classes: int=1, reduction: str="mean", is_higher_better: bool=False
+    ):
         assert isinstance(n_classes, int) and n_classes >= 0
         assert isinstance(reduction, str) and reduction in ["mean", "sum"]
         assert isinstance(is_higher_better, bool)
@@ -75,9 +75,11 @@ class Loss:
     def __call__(self, x: np.ndarray, t: np.ndarray):
         loss = self.loss(x, t)
         return self.reduction(loss)
-    def loss(self, x: np.ndarray, t: np.ndarray):
+    def loss(self, x: np.ndarray, t: np.ndarray) -> np.ndarray:
         raise NotImplementedError
-    def gradhess(self, x: np.ndarray, t: np.ndarray):
+    def gradhess(self, x: np.ndarray, t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        raise NotImplementedError
+    def gradhess_matrix(self, x: np.ndarray, t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         raise NotImplementedError
     def to_dict(self):
         return {
@@ -96,8 +98,9 @@ class Loss:
 
 class LGBCustomObjective:
     def __init__(self, func_loss: Loss, mode: str="xgb"):
+        LOGGER.info(f"{__class__.__name__} init: {func_loss}, {mode}")
         assert isinstance(func_loss, Loss)
-        assert isinstance(mode, str) and mode in ["xgb", "lgb"]
+        assert isinstance(mode, str) and mode in ["xgb", "lgb", "cat"]
         self.func_loss = func_loss
         self.mode      = mode
         if   self.mode == "xgb":
@@ -108,6 +111,11 @@ class LGBCustomObjective:
             self.conv_input  = self.convert_lgb_input
             self.comp_weight = self.compute_lgb_weight
             self.conv_output = self.convert_lgb_output
+        elif self.mode == "cat":
+            # self.func_loss.is_check = False
+            self.conv_input  = None # Don't use __call__ in catboost
+            self.comp_weight = None # Don't use __call__ in catboost
+            self.conv_output = None # Don't use __call__ in catboost
     def __call__(self, y_pred: np.ndarray, data):
         y_pred, y_true = self.conv_input(y_pred, data)
         grad, hess = self.func_loss.gradhess(y_pred, y_true)
@@ -164,10 +172,22 @@ class LGBCustomObjective:
     @classmethod
     def convert_lgb_output(cls, grad: np.ndarray, hess: np.ndarray):
         return grad.T.reshape(-1), hess.T.reshape(-1)
+    def calc_ders_range(self, approxes: np.ndarray, targets: np.ndarray, weights: np.ndarray):
+        # for catboost
+        grad, hess = self.func_loss.gradhess(approxes, targets)
+        grad, hess = weights * grad, weights * hess
+        return [(x, y) for x, y in zip(grad, hess)]
+    def calc_ders_multi(self, approxes: np.ndarray, targets: float, weights: float):
+        # for catboost
+        grad, hess = self.func_loss.gradhess_matrix(approxes.reshape(1, -1), np.array([targets]))
+        grad, hess = grad[0] * weights, hess[0] * weights
+        grad, hess = (-1 * grad).tolist(), (-1 * hess).tolist() # -1 is needed for catboost
+        return grad, hess
 
 
 class LGBCustomEval(LGBCustomObjective):
     def __init__(self, func_loss: Loss, mode: str="xgb", name: str=None, is_higher_better: bool=None):
+        LOGGER.info(f"{__class__.__name__} init: {func_loss}, {mode}")
         if name             is None: name             = func_loss.name
         if is_higher_better is None: is_higher_better = func_loss.is_higher_better
         assert isinstance(name, str)
@@ -187,6 +207,19 @@ class LGBCustomEval(LGBCustomObjective):
         return self.name, value
     def convert_lgb_metric(self, value):
         return self.name, value, self.is_higher_better
+    def is_max_optimal(self):
+        # for catboost
+        return self.func_loss.is_higher_better
+    def evaluate(self, approxes: tuple[np.ndarray, ...], targets: np.ndarray, weights: None | np.ndarray):
+        # for catboost
+        y_pred = np.stack(approxes).T
+        loss   = self.func_loss.loss(y_pred, targets)
+        if weights is not None:
+            loss = loss * weights
+        return loss.sum(), (weights.sum() if weights is not None else len(loss))
+    def get_final_error(self, error, weight):
+        # for catboost
+        return error / (weight + 1e-38)
 
 
 def calc_grad_hess(x: np.ndarray, t: np.ndarray, loss_func=None, dx=1e-6, **kwargs):
@@ -227,6 +260,8 @@ class BinaryCrossEntropyLoss(Loss):
         grad = x - t
         hess = (1 - x) * x
         return grad, hess
+    def gradhess_matrix(self, x: np.ndarray, t: np.ndarray):
+        return self.gradhess(x, t)
     def to_dict(self):
         return super().to_dict() | {"dx": self.dx}
     @classmethod
@@ -242,6 +277,7 @@ class CrossEntropyLoss(Loss):
         self.is_clip    = (dx > 0)
         self.is_prob    = True
         self.conv_t_sum = _return_1
+        self._identity  = np.eye(self.n_classes, dtype=bool)
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         if self.name == "ce":
@@ -270,6 +306,18 @@ class CrossEntropyLoss(Loss):
         grad   = t_sum2 - t
         hess   = t_sum2 * (1 - x)
         return grad, hess
+    def gradhess_matrix(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        x = softmax(x)
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
+        t_sum  = self.conv_t_sum(t)
+        t_sum2 = t_sum * x
+        grad   = t_sum2 - t
+        x1     = t_sum2.reshape(-1, self.n_classes, 1)
+        x2     = x.reshape(     -1, 1, self.n_classes)
+        hess   = -1 * x1 * x2
+        hess[:, self._identity] += t_sum2
+        return grad, hess
     def to_dict(self):
         return super().to_dict() | {"dx": self.dx}
     @classmethod
@@ -297,7 +345,7 @@ class CrossEntropyLossArgmax(Loss):
                 assert x.shape[1] == t.shape[1] == self.n_classes
                 self.conv_t = partial(np.argmax, axis=1)
             else:
-                assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
+                # assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
                 assert x.shape[1] == self.n_classes
                 self.conv_t = partial(np.astype, dtype=np.int32)
             self.indexes = np.arange(t.shape[0] * 10, dtype=int) # x 10, in case shape is different at each iteration
@@ -331,7 +379,7 @@ class CategoricalCrossEntropyLoss(CrossEntropyLoss):
         super().check(x, t)
         assert len(x.shape) == 2
         assert len(t.shape) == 1
-        assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
+        # assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
         assert (t - t.astype(int)).sum() == 0 # There is no fraction
         if self.is_smooth:
             self.ndfid = np.identity(x.shape[1], dtype=bool)
@@ -358,51 +406,96 @@ class FocalLoss(Loss):
         assert isinstance(gamma, float) and gamma >= 0
         assert check_type(dx, [float, int]) and dx >= 0.0 and dx < 1.0
         super().__init__(f"fl({gamma})", n_classes=n_classes, is_higher_better=False)
-        self.gamma   = gamma
-        self.dx      = dx
-        self.is_clip = (dx > 0)
-        self.is_prob = True
-        self.ndfid   = None
+        self.gamma      = gamma
+        self.dx         = dx
+        self.is_clip    = (dx > 0)
+        self.is_prob    = True
+        self.conv_t_sum = _return_1
+        self._identity  = np.eye(self.n_classes, dtype=bool)
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
-        assert len(x.shape) == 2
-        assert len(t.shape) == 1
-        assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
-        assert (t - t.astype(int)).sum() == 0 # There is no fraction
-        self.ndfid = np.identity(x.shape[1], dtype=bool)
+        if self.name.startswith("fl("):
+            assert len(x.shape) == 2
+            assert len(t.shape) == 2
+            assert x.shape[1] == t.shape[1] == self.n_classes
+            assert (t > 1).sum() == (t < 0).sum() == 0
+            if ((t.sum(axis=1) / 1e-6).round(0).astype(np.int32) == int(round(1 / 1e-6, 0))).sum() != t.shape[0]:
+                # If the sum of "t" is not equal to 1 (In other words, if "t" is not a probability)
+                LOGGER.warning(
+                    "The sum of 't' is not equal to 1 (In other words, 't' is not a probability). " + 
+                    "This means that the loss function may not be able to calculate the gradient and hessian correctly."
+                )
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
         if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
-        t = self.ndfid[t.astype(int)]
-        return -1 * ((1 - x[t]) ** self.gamma) * np.log(x[t])
+        return (-1 * t * ((1 - x) ** self.gamma) * np.log(x)).sum(axis=-1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
-        """
-        see: https://hackmd.io/Kd14LHwETwOXLbzh_adpQQ
-        """
         x, t = self.convert(x, t)
-        x    = softmax(x)
+        x = softmax(x)
+        g = self.gamma
         if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
-        t    = self.ndfid[t.astype(int)]
-        yk   = x[t].reshape(-1, 1)
-        yk_log  = np.log(yk)
-        yk_p0   = self.gamma * yk
-        yk_p1   = yk_p0 * yk_log
-        yk_p2   = 1 - yk
-        yk_p3   = yk_p2 ** self.gamma
-        yk_p4   = 1 - (yk + yk_p1)
-        grad    = x * (yk_p2 ** (self.gamma - 1)) * yk_p4
-        grad[t] = (-yk_p3 * yk_p4).reshape(-1)
-        hess    = x * (yk_p2 ** (self.gamma - 2)) * (
-            (1 - x - yk + yk_p0 * x ) * yk_p4 + x * yk * yk_p2 * (self.gamma * yk_log + self.gamma + 1)
+        l  = np.log(x)
+        ij = x.reshape(-1, self.n_classes, 1) * x.reshape(-1, 1, self.n_classes)
+        A  = g * x * l + x - 1
+        B  = (1 - x) ** (g - 1)
+        C  = (t * Z).sum(axis=-1, keepdims=True)
+        D  = g / (1 - x) * B * (-1 * A + l - x + 1)
+        E  = t * D * x
+        F  = t * D * (x - 1)
+        Z  = A * B
+        grad    = t * Z - x * C
+        hess_ii = E * (1 - x) * (1 - x) - x * (1 - x) * C + (x ** 2) * (E.sum(axis=-1, keepdims=True) - E)
+        return grad, hess_ii
+    def gradhess_matrix(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        x = softmax(x)
+        g = self.gamma
+        if self.is_clip: x = np.clip(x, self.dx, 1.0 - self.dx)
+        l  = np.log(x)
+        ij = x.reshape(-1, self.n_classes, 1) * x.reshape(-1, 1, self.n_classes)
+        A  = g * x * l + x - 1
+        B  = (1 - x) ** (g - 1)
+        Z  = A * B
+        C  = (t * Z).sum(axis=-1, keepdims=True)
+        D  = g / (1 - x) * B * (-1 * A + l - x + 1)
+        E  = t * D * x
+        F  = t * D * (x - 1)
+        grad    = t * Z - x * C
+        hess_ij = (
+            ij * F.reshape(-1, self.n_classes, 1) + 
+            ij * C.reshape(-1, 1, 1) + 
+            ij * F.reshape(-1, 1, self.n_classes) + 
+            ij * (
+                E.sum(axis=-1, keepdims=True).reshape(-1, 1, 1)
+                - E.reshape(-1, self.n_classes, 1)
+                - E.reshape(-1, 1, self.n_classes)
+            )
         )
-        hess[t] = (yk * yk_p3 * (self.gamma * yk_log * (1 - yk - yk_p0) + 1 - yk - 2 * yk_p0 + 2 * self.gamma)).reshape(-1)
-        return grad, hess
+        hess_ii = E * (1 - x) * (1 - x) - x * (1 - x) * C + (x ** 2) * (E.sum(axis=-1, keepdims=True) - E)
+        hess_ij[:, self._identity] = hess_ii
+        return grad, hess_ij
     def to_dict(self):
         return super().to_dict() | {"dx": self.dx, "gamma": self.gamma}
     @classmethod
     def from_dict(cls, json_model: dict):
         return cls(json_model["n_classes"], gamma=json_model["gamma"], dx=json_model["dx"])
+
+
+class CategoricalFocalLoss(FocalLoss):
+    def __init__(self, n_classes: int, gamma: float=1.0, dx: float=1e-7):
+        super().__init__(n_classes, gamma=gamma, dx=dx)
+        self.name      = self.name.replace("fl(", "cfl(")
+    def check(self, x: np.ndarray, t: np.ndarray):
+        super().check(x, t)
+        assert len(x.shape) == 2
+        assert len(t.shape) == 1
+        assert x.shape[1] == self.n_classes
+        assert (t - t.astype(int)).sum() == 0 # There is no fraction
+    def convert(self, x: np.ndarray, t: np.ndarray):
+        x, t = super().convert(x, t)
+        t = self._identity[t.astype(int)]
+        return x, t.astype(float)
 
 
 class MSELoss(Loss):

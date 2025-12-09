@@ -18,6 +18,6 @@ if __name__ == "__main__":
     model.fit(
         train_x, train_y, loss_func=loss_func, num_iterations=20,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=loss_func_eval,
-        early_stopping_rounds=None, early_stopping_name=0, 
+        early_stopping_rounds=None, early_stopping_idx=0, 
     )
     print(model.predict(valid_x, is_softmax=False))

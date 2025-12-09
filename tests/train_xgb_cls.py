@@ -22,8 +22,8 @@ if __name__ == "__main__":
         format="numpy", split_type="valid", test_size=0.3, valid_size=0.2
     )
     n_class = dataset.metadata.n_classes
-    n_iter  = 10
-    lr      = 0.05
+    n_iter  = 100
+    lr      = 0.2
     max_bin = 64
     ndepth  = -1
     valeval = {}
@@ -35,20 +35,25 @@ if __name__ == "__main__":
     LOGGER.info("Test training stop", color=["BOLD", "UNDERLINE", "GREEN"])
     model   = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func="multi:softmax", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])],
+        train_x, train_y, loss_func="multi", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])],
         train_stopping_val=2.0, train_stopping_rounds=5, train_stopping_is_over=True
     )
     model.fit(
-        train_x, train_y, loss_func="multi:softmax", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])],
+        train_x, train_y, loss_func="multi", num_iterations=10, sample_weight=["balanced", np.random.rand(train_x.shape[0])],
         train_stopping_time=0.01, train_stopping_rounds=5
     )
 
     LOGGER.info("public loss multiclass", color=["BOLD", "UNDERLINE", "GREEN"])
     model   = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func="multi:softmax", num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["mlogloss", Accuracy(top_k=2)], sample_weight="balanced",
-        early_stopping_rounds=20, early_stopping_name=0,
+        train_x, train_y, loss_func="multi", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=None, sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0,
+    )
+    model.fit(
+        train_x, train_y, loss_func="multi", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multi", Accuracy(top_k=2)], sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration, is_softmax=True)
     valeval["multiclass_log"] = log_loss(test_y, ndf_pred)
@@ -59,7 +64,7 @@ if __name__ == "__main__":
     model.fit(
         train_x, train_y, loss_func=CategoricalCrossEntropyLoss(n_class, smoothing=1e-4), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class), Accuracy(top_k=2)],
-        early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x)
     valeval["CategoryCE_log"] = log_loss(test_y, ndf_pred)
@@ -70,7 +75,7 @@ if __name__ == "__main__":
     model.fit(
         train_x, train_y, loss_func=FocalLoss(n_class, gamma=0.5, dx=1e-5), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class), Accuracy(top_k=2)],
-        early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x)
     valeval["FocalLoss_log"] = log_loss(test_y, ndf_pred)
@@ -81,7 +86,7 @@ if __name__ == "__main__":
     model.fit(
         train_x, train_y, loss_func=LogitMarginL1Loss(n_class, margin=20.0, alpha=0.01, dx=1e-5), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", CategoricalCrossEntropyLoss(n_class), Accuracy(top_k=2)],
-        early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x)
     valeval["LogitMarginL1Loss_log"] = log_loss(test_y, ndf_pred)
@@ -96,7 +101,7 @@ if __name__ == "__main__":
     # model.fit(
     #     train_x, train_y_ce, loss_func=CrossEntropyLoss(n_class, dx=1e-5), num_iterations=n_iter,
     #     x_valid=valid_x, y_valid=valid_y_ce, loss_func_eval=["__copy__", CrossEntropyLossArgmax(n_class), Accuracy(top_k=2)],
-    #     early_stopping_rounds=20, early_stopping_name=0, 
+    #     early_stopping_rounds=20, early_stopping_idx=0, 
     # )
     # ndf_pred = model.predict(test_x)
     # valeval["CrossEntropyLoss_log"] = log_loss(test_y, ndf_pred)
@@ -109,7 +114,7 @@ if __name__ == "__main__":
     #     model.fit(
     #         train_x, _train_y, loss_func=BinaryCrossEntropyLoss(), num_iterations=n_iter,
     #         x_valid=valid_x, y_valid=_valid_y, loss_func_eval=["__copy__", Accuracy(top_k=1)],
-    #         early_stopping_rounds=20, early_stopping_name=0, sample_weight="balanced",
+    #         early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     #     )
     #     list_pred.append(model.predict(test_x))
     # ndf = np.stack(list_pred).T
@@ -126,7 +131,7 @@ if __name__ == "__main__":
     # model.fit(
     #     train_x, train_y_ndcg, loss_func=CrossEntropyNDCGLoss(n_class), num_iterations=n_iter,
     #     x_valid=valid_x, y_valid=valid_y_ndcg, loss_func_eval="__copy__",
-    #     early_stopping_rounds=20, early_stopping_name=0, sample_weight=None,
+    #     early_stopping_rounds=20, early_stopping_idx=0, sample_weight=None,
     # )
     # ndf_pred = model.predict(test_x)
     # valeval["CrossEntropyNDCGLoss_log"] = log_loss(test_y, ndf_pred)

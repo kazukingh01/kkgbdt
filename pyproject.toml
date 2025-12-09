@@ -2,16 +2,17 @@
 name = "kkgbdt"
 version = "1.3.7"
 requires-python = ">= 3.12.2"
-description = "my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM and XGBoost."
+description = "my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM, XGBoost, and CatBoost."
 dependencies = [
     'kklogger @ git+https://github.com/kazukingh01/kklogger.git@f6ddcc099da0102a14a62d67bede1b1c30eaf839',
-    'kktestdata @ git+https://github.com/kazukingh01/kktestdata.git@d2529701bdf7d7630685bd08d2c4fb9d05becc91',
+    'kktestdata @ git+https://github.com/kazukingh01/kktestdata.git@b70d94378305355056973ec77e1f171b875f79b7',
     'pandas==2.2.3',
     'numpy==2.2.1',
     'optuna==4.1.0',
     'xgboost==3.1.2', # 2.1.3 has bug. The program crashes with the following error when the training with 'multi_output_tree' finishes. "terminate called without an active exception"
     'lightgbm==4.6.0',
-    'scikit-learn==1.5.2',
+    'catboost==1.2.8',
+    'scikit-learn==1.7.2',
     'scipy==1.14.1',
     'joblib==1.4.2',
     'findiff==0.12.1',
