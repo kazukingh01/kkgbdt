@@ -604,35 +604,37 @@ def _train_cat(p: ParamsTraining, evals_result: dict = None):
 
 def alias_parameters(
     mode: str="xgb",
-    num_class: int=None, learning_rate: float=None, num_leaves: int | None=None, n_jobs: int=None, is_gpu: bool=None, 
-    random_seed: int=0, max_depth: int=None, min_child_samples: int=None, min_child_weight: float=None,
-    subsample: float=None, colsample_bytree: float=None, colsample_bylevel: float=None,
-    colsample_bynode: float=None, reg_alpha: float=None, reg_lambda: float=None, min_split_gain: float=None, 
-    max_bin: int=None, min_data_in_bin: int=None, path_smooth: float=None, multi_strategy: str=None, verbosity: int=None,
+    num_class: int=None, learning_rate: float=None, n_jobs: int=None, is_gpu: bool=None, 
+    max_bin: int=None, random_seed: int=0, max_depth: int=None, num_leaves: int | None=None, 
+    min_child_samples: int | None=None, min_child_weight: float | None=None, subsample: float | None=None,
+    colsample_bytree: float | None=None, colsample_bylevel: float | None=None, colsample_bynode: float | None=None,
+    reg_alpha: float | None=None, reg_lambda: float | None=None,
+    min_split_gain: float | None=None, min_data_in_bin: int | None=None, path_smooth: float | None=None, 
+    multi_strategy: str | None=None, verbosity: int | None=None,
 ) -> dict[str, Any]:
     LOGGER.info(f"START. mode={mode}")
     check_mode(mode)
     assert isinstance(num_class, int) and num_class > 0
     assert isinstance(learning_rate, float) and learning_rate >= 1e-5 and learning_rate <= 1
-    assert (isinstance(num_leaves, int) and num_leaves >= 0) or num_leaves is None
     assert isinstance(n_jobs, int) and (n_jobs > 0 or n_jobs == -1)
     assert isinstance(is_gpu, bool)
+    assert isinstance(max_bin, int) and max_bin >= 4
     assert isinstance(random_seed, int) and random_seed >= 0
     assert isinstance(max_depth, int) and max_depth >= -1
-    assert isinstance(min_child_samples, int) and min_child_samples > 0
-    assert check_type(min_child_weight, [float, int]) and min_child_weight >= 1e-5
-    assert check_type(subsample, [float, int]) and subsample > 0 and subsample <= 1
-    assert check_type(colsample_bytree,  [float, int]) and colsample_bytree  > 0 and colsample_bytree  <= 1
-    assert check_type(colsample_bylevel, [float, int]) and colsample_bylevel > 0 and colsample_bylevel <= 1
-    assert check_type(colsample_bynode,  [float, int]) and colsample_bynode  > 0 and colsample_bynode  <= 1
-    assert check_type(reg_alpha,  [float, int]) and reg_alpha >= 0
-    assert check_type(reg_lambda, [float, int]) and reg_alpha >= 0
-    assert check_type(min_split_gain, [float, int]) and min_split_gain >= 0
-    assert isinstance(max_bin, int) and max_bin >= 4
-    assert isinstance(min_data_in_bin, int) and min_data_in_bin >= 1
-    assert check_type(path_smooth, [int, float]) and path_smooth >= 0
-    assert multi_strategy is None or multi_strategy in ["one_output_per_tree", "multi_output_tree"]
-    assert verbosity is None or isinstance(verbosity, int)
+    assert num_leaves        is None or (isinstance(num_leaves, int) and num_leaves >= 0)
+    assert min_child_samples is None or (isinstance(min_child_samples, int) and min_child_samples > 0)
+    assert min_child_weight  is None or (check_type(min_child_weight, [float, int]) and min_child_weight >= 1e-5)
+    assert subsample         is None or (check_type(subsample, [float, int]) and subsample > 0 and subsample <= 1)
+    assert colsample_bytree  is None or (check_type(colsample_bytree,  [float, int]) and colsample_bytree  > 0 and colsample_bytree  <= 1)
+    assert colsample_bylevel is None or (check_type(colsample_bylevel, [float, int]) and colsample_bylevel > 0 and colsample_bylevel <= 1)
+    assert colsample_bynode  is None or (check_type(colsample_bynode,  [float, int]) and colsample_bynode  > 0 and colsample_bynode  <= 1)
+    assert reg_alpha         is None or (check_type(reg_alpha,  [float, int]) and reg_alpha  >= 0)
+    assert reg_lambda        is None or (check_type(reg_lambda, [float, int]) and reg_lambda >= 0)
+    assert min_split_gain    is None or (check_type(min_split_gain, [float, int]) and min_split_gain >= 0)
+    assert min_data_in_bin   is None or (isinstance(min_data_in_bin, int) and min_data_in_bin >= 1)
+    assert path_smooth       is None or (check_type(path_smooth, [int, float]) and path_smooth >= 0)
+    assert multi_strategy    is None or (multi_strategy in ["one_output_per_tree", "multi_output_tree"])
+    assert verbosity         is None or (isinstance(verbosity, int) and verbosity >= 0)
     params = {}
     if mode == "xgb":
         params["num_class"]   = num_class
@@ -684,7 +686,8 @@ def alias_parameters(
         params["max_bin"]                 = max_bin - 1
         params["min_data_in_bin"]         = min_data_in_bin
         params["path_smooth"]             = path_smooth
-        if path_smooth > 0.0: assert params["min_data_in_leaf"] >= 2
+        if path_smooth is not None and path_smooth > 0.0:
+            assert params["min_data_in_leaf"] >= 2
         params["verbosity"]               = -1 if verbosity is None else verbosity
         for x in ["colsample_bylevel", "multi_strategy"]:
             if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
