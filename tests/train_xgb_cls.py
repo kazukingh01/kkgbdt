@@ -25,7 +25,7 @@ if __name__ == "__main__":
     n_iter  = 100
     lr      = 0.2
     max_bin = 64
-    ndepth  = -1
+    ndepth  = 6
     valeval = {}
     LOGGER.info("data train", color=["BOLD", "CYAN"])
     LOGGER.info(f"\n{pd.DataFrame(train_y).groupby(0).size()}")

@@ -23,7 +23,7 @@ if __name__ == "__main__":
     assert all(LIST_DATASEET[i] for i in args.dataset)
 
     reg      = DatasetRegistry()
-    filepath = "params_lgb.db"
+    filepath = "params_cat.db"
     for dataset_name in [LIST_DATASEET[i] for i in args.dataset]:
         LOGGER.info(f"Tuning {dataset_name}...", color=["BOLD", "CYAN", "UNDERLINE"])
         dataset = reg.create(dataset_name)
@@ -37,16 +37,16 @@ if __name__ == "__main__":
         except KeyError: pass
         study   = optuna.create_study(study_name=f"{filepath.split('.')[0]}_{dataset_name}", storage=f'sqlite:///{filepath}', sampler=sampler, directions=["minimize"])
         func    = partial(tune_parameter,
-            mode="lgb", num_class=n_class, n_jobs=args.jobs, eval_string='model.booster.best_score["valid_0"]["multi_logloss"]',
+            mode="cat", num_class=n_class, n_jobs=args.jobs, eval_string='model.evals_result["validation"]["MultiClass"][model.best_iteration]',
             x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.iter,
             x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
             early_stopping_rounds=5, early_stopping_idx=0,
             params_const = {
                 "learning_rate"    : 0.05,
-                "num_leaves"       : (2 ** 8), # depth = 8
+                "num_leaves"       : None,
                 "is_gpu"           : False,
                 "random_seed"      : 0,
-                "max_depth"        : -1,
+                "max_depth"        : 8,
                 "min_child_samples": None,
                 "subsample"        : 1,
                 "colsample_bytree" : 1,
@@ -57,9 +57,9 @@ if __name__ == "__main__":
                 "min_split_gain"   : None,
                 "path_smooth"      : None,
                 "verbosity"        : None,
+                "min_child_weight" : None,
             },
             params_search='''{
-                "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
                 "colsample_bynode" : trial.suggest_float("colsample_bynode", 0.1, 0.9, log=False),
                 "reg_lambda"       : trial.suggest_float("lambda", 1e-4, 1e3, log=True),
             }'''
