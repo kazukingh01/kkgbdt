@@ -14,6 +14,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--niter",  type=int, default=300)
     parser.add_argument("--ntrial", type=int, default=50)
+    parser.add_argument("--njobs",  type=int, default=8)
     args = parser.parse_args()
 
     reg      = DatasetRegistry()
@@ -33,7 +34,7 @@ if __name__ == "__main__":
         except KeyError: pass
         study   = optuna.create_study(study_name=f"params_lgb_{dataset_name}", storage=f'sqlite:///params.db', sampler=sampler, directions=["minimize"])
         func    = partial(tune_parameter,
-            mode="lgb", num_class=n_class, n_jobs=-1, eval_string='model.booster.best_score["valid_0"]["multi_logloss"]',
+            mode="lgb", num_class=n_class, n_jobs=args.njobs, eval_string='model.booster.best_score["valid_0"]["multi_logloss"]',
             x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.niter,
             x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
             early_stopping_rounds=5, early_stopping_idx=0,
