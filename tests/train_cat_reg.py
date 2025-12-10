@@ -26,7 +26,7 @@ if __name__ == "__main__":
     n_iter  = 100
     lr      = 0.2
     max_bin = 64
-    ndepth  = -1
+    ndepth  = 6
     valeval = {}
     LOGGER.info("data train", color=["BOLD", "CYAN"])
     LOGGER.info(f"\n{pd.Series(train_y).describe()}")
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
 
     LOGGER.info("public loss rmse ( no validation )", color=["BOLD", "UNDERLINE", "GREEN"])
-    model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model   = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
         train_x, train_y, loss_func="reg", num_iterations=n_iter,
     )
@@ -43,10 +43,10 @@ if __name__ == "__main__":
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
 
     LOGGER.info("public loss rmse", color=["BOLD", "UNDERLINE", "GREEN"])
-    model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model   = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
         train_x, train_y, loss_func="reg", num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["reg", MSELoss()], 
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=MSELoss(), 
         early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
@@ -55,10 +55,10 @@ if __name__ == "__main__":
     valeval["rmse_rmse"] = rmse(test_y, ndf_pred)
 
     LOGGER.info("public loss huber", color=["BOLD", "UNDERLINE", "GREEN"])
-    model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
-        train_x, train_y, loss_func="huber", num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["huber", MSELoss()],
+        train_x, train_y, loss_func="huber(delta=1)", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y,
         early_stopping_rounds=20, early_stopping_idx=0, 
     )
     ndf_pred = model.predict(test_x)
@@ -67,10 +67,10 @@ if __name__ == "__main__":
     valeval["huber_rmse"] = rmse(test_y, ndf_pred)
 
     LOGGER.info("custom loss MSELoss", color=["BOLD", "UNDERLINE", "GREEN"])
-    model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
         train_x, train_y, loss_func=MSELoss(), num_iterations=n_iter,
-        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", MAELoss()],
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", "reg"],
         early_stopping_rounds=20, early_stopping_idx=0, 
     )
     ndf_pred = model.predict(test_x)

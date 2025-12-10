@@ -18,7 +18,7 @@ def tune_parameter(
     trial, mode: str="xgb", num_class: int=None, n_jobs: int=1, eval_string: str=None, eval_string_dict: dict[str, object]={},
     x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: str | Loss=None, num_iterations: int=None,
     x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
-    loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_name: int | str=None,
+    loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_idx: int=None,
     train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
     sample_weight: str | np.ndarray=None, categorical_features: list[int]=None,
     group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None,
@@ -78,11 +78,13 @@ def tune_parameter(
     model.fit(
         x_train, y_train, loss_func=loss_func, num_iterations=num_iterations, 
         x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
-        early_stopping_rounds=early_stopping_rounds, early_stopping_name=early_stopping_name,
+        early_stopping_rounds=early_stopping_rounds, early_stopping_idx=early_stopping_idx,
         train_stopping_val=train_stopping_val, train_stopping_rounds=train_stopping_rounds, 
         train_stopping_is_over=train_stopping_is_over, train_stopping_time=train_stopping_time,
         sample_weight=sample_weight, categorical_features=categorical_features,
         group_train=group_train, group_valid=group_valid,
     )
+    trial.set_user_attr("total_iterations", model.total_iterations)
+    trial.set_user_attr("time_train",       model.time_train)
     LOGGER.info("END")
     return eval(eval_string, {}, (eval_string_dict | {"model": model, "np": np, "_x_valid": x_valid, "_y_valid": y_valid, "_group_valid": group_valid}))

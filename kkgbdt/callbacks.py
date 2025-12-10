@@ -1,6 +1,9 @@
 import time
+from types import SimpleNamespace
 from xgboost.callback import TrainingCallback
 from lightgbm.callback import EarlyStopException, _format_eval_result, _LogEvaluationCallback, CallbackEnv
+from catboost.core import _TrainCallbacksWrapper
+
 from kklogger import set_logger
 from .com import check_type
 
@@ -130,3 +133,33 @@ class _KkLogEvaluationCallback(_LogEvaluationCallback):
 def log_evaluation(period: int = 1, show_stdv: bool = True) -> _KkLogEvaluationCallback:
     return _KkLogEvaluationCallback(period=period, show_stdv=show_stdv)
 
+
+def create_callbacks_cb():
+    class EvaluationCallback():
+        def __init__(self):
+            self.indexes = None
+        def after_iteration(self, info: SimpleNamespace):
+            self.check_info(info)
+            metrics = []
+            for x, y in self.indexes:
+                metrics.append(f"{x}/{y[:y.find(':') if ':' in y else None]}: {info.metrics[x][y][-1]}")
+            LOGGER.info(f"[{info.iteration}] {'\t'.join(metrics)}")
+            return True
+        def check_info(self, info: SimpleNamespace):
+            if self.indexes is None:
+                self.indexes = []
+                for x, y in info.metrics.items():
+                    for a, _ in y.items():
+                        if ":" in a:
+                            if "use_weights" in a:
+                                if x == "learn" and "use_weights=true" in a:
+                                    self.indexes.append((x, a))
+                                elif x.startswith("validation") and "use_weights=false" in a:
+                                    self.indexes.append((x, a))
+                            else:
+                                self.indexes.append((x, a))
+                        else:
+                            self.indexes.append((x, a))
+    return _TrainCallbacksWrapper([
+        EvaluationCallback(),
+    ])
