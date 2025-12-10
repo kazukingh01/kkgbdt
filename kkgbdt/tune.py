@@ -84,7 +84,7 @@ def tune_parameter(
         sample_weight=sample_weight, categorical_features=categorical_features,
         group_train=group_train, group_valid=group_valid,
     )
-    trial.set_user_attr("total_iterations", model.total_iterations)
-    trial.set_user_attr("time_train",       model.time_train)
+    trial.set_user_attr("total_iteration", model.total_iteration)
+    trial.set_user_attr("time_train",      model.time_train)
     LOGGER.info("END")
     return eval(eval_string, {}, (eval_string_dict | {"model": model, "np": np, "_x_valid": x_valid, "_y_valid": y_valid, "_group_valid": group_valid}))
