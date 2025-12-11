@@ -4,7 +4,9 @@ from functools import partial
 from kkgbdt.tune import tune_parameter
 from kklogger import set_logger
 from kktestdata import DatasetRegistry
-from .exp_datasets import LIST_DATASEET, PARAMS_CONST_MODE
+
+# local imports
+from exp_datasets import LIST_DATASEET, PARAMS_CONST_MODE
 
 
 np.random.seed(0)

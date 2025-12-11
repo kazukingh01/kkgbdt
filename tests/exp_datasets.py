@@ -47,7 +47,7 @@ PATAMS_CONST_XGB = (PARAMS_CONST | {
     "reg_lambda"       : None,
 })
 PATAMS_CONST_CAT = (PARAMS_CONST | {
-    "learning_rate"    : (PARAMS_CONST["max_depth"] * 5.0),
+    "learning_rate"    : (PARAMS_CONST["learning_rate"] * 5.0),
     "min_child_weight" : None,
     "colsample_bytree" : 1, 
     "colsample_bylevel": 1,
