@@ -16,6 +16,8 @@ dependencies = [
     'scipy==1.14.1',
     'joblib==1.4.2',
     'findiff==0.12.1',
+    'optuna-dashboard==0.19.0',
+    'streamlit==1.51.0',
 ]
 
 [build-system]
