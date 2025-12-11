@@ -1,5 +1,4 @@
-import argparse, optuna, datetime
-import wandb
+import argparse, datetime
 from kktestdata import DatasetRegistry
 from kkgbdt.model import KkGBDT
 from kkgbdt.functions import log_loss
@@ -63,6 +62,7 @@ PARAMS_CONST_MODE = {
 
 
 if __name__ == "__main__":
+    import wandb
     parser = argparse.ArgumentParser()
     parser.add_argument("--iter",    type=int, default=1000)
     parser.add_argument("--jobs",    type=int, default=8)
