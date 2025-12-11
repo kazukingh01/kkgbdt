@@ -4,14 +4,12 @@ from functools import partial
 from kkgbdt.tune import tune_parameter
 from kklogger import set_logger
 from kktestdata import DatasetRegistry
+from .exp_datasets import LIST_DATASEET, PARAMS_CONST_MODE
 
 
 np.random.seed(0)
 LOGGER = set_logger(__name__)
-LIST_DATASEET = [
-    "Fashion-MNIST","KDDCup99","SDSS17","covertype","gas-drift","helena","hiva_agnostic","mnist_784","nursery",
-    "shuttle","splice","students_dropout_and_academic_success","tamilnadu-electricity","walking-activity"
-]
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -41,23 +39,7 @@ if __name__ == "__main__":
             x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.iter,
             x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
             early_stopping_rounds=5, early_stopping_idx=0,
-            params_const = {
-                "learning_rate"    : 0.05,
-                "num_leaves"       : None,
-                "is_gpu"           : False,
-                "random_seed"      : 0,
-                "max_depth"        : 8,
-                "min_child_samples": None,
-                "subsample"        : 1,
-                "colsample_bytree" : 1,
-                "colsample_bylevel": 1,
-                "max_bin"          : 128,
-                "min_data_in_bin"  : None,
-                "reg_alpha"        : None,
-                "min_split_gain"   : None,
-                "path_smooth"      : None,
-                "verbosity"        : None,
-            },
+            params_const = PARAMS_CONST_MODE["xgb"],
             params_search='''{
                 "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
                 "colsample_bynode" : trial.suggest_float("colsample_bynode", 0.1, 0.9, log=False),
