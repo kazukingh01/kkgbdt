@@ -72,6 +72,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["MSELoss_rmse"] = rmse(test_y, ndf_pred)
 
     LOGGER.info(f"{json.dumps({x:float(y) for x, y in valeval.items()}, indent=2)}")

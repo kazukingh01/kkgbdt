@@ -1,5 +1,4 @@
 import json
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from kktestdata import DatasetRegistry
@@ -43,6 +42,33 @@ if __name__ == "__main__":
         train_stopping_time=0.01, train_stopping_rounds=5
     )
 
+    LOGGER.info("public loss binary", color=["BOLD", "UNDERLINE", "GREEN"])
+    model   = KkGBDT(1, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model.fit(
+        train_x, (train_y == 1).astype(int), loss_func="binary", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=(valid_y == 1).astype(int), sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0,
+    )
+    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.best_iteration < n_iter
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    valeval["binary_log"] = BinaryCrossEntropyLoss()(ndf_pred, (test_y == 1).astype(int))
+    valeval["binary_acc"] = Accuracy(top_k=1)(ndf_pred, (test_y == 1).astype(int))
+
+    LOGGER.info("custom public loss binary", color=["BOLD", "UNDERLINE", "GREEN"])
+    model   = KkGBDT(1, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model.fit(
+        train_x, (train_y == 1).astype(int), loss_func=BinaryCrossEntropyLoss(), num_iterations=n_iter,
+        x_valid=valid_x, y_valid=(valid_y == 1).astype(int), sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0,
+    )
+    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.best_iteration < n_iter
+    assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
+    valeval["BinaryCrossEntropyLoss_log"] = BinaryCrossEntropyLoss()(ndf_pred, (test_y == 1).astype(int))
+    valeval["BinaryCrossEntropyLoss_acc"] = Accuracy(top_k=1)(ndf_pred, (test_y == 1).astype(int))
+
     LOGGER.info("public loss multiclass ( no validation )", color=["BOLD", "UNDERLINE", "GREEN"])
     model   = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, is_softmax=True)
     model.fit(
@@ -73,6 +99,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["CategoryCE_log"] = log_loss(test_y, ndf_pred)
     valeval["CategoryCE_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
@@ -86,6 +113,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["FocalLoss_log"] = log_loss(test_y, ndf_pred)
     valeval["FocalLoss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
@@ -99,6 +127,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["LogitMarginL1Loss_log"] = log_loss(test_y, ndf_pred)
     valeval["LogitMarginL1Loss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 

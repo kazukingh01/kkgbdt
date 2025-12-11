@@ -59,6 +59,9 @@ class Loss:
         return f"{self.__class__.__name__}({self.name})"
     def __repr__(self):
         return self.__str__()
+    def __eq__(self, other):
+        assert isinstance(other, self.__class__)
+        return self.to_dict() == other.to_dict()
     def convert(self, x: np.ndarray, t: np.ndarray):
         if self.is_check:
             self.check(x, t)
@@ -497,6 +500,9 @@ class CategoricalFocalLoss(FocalLoss):
         x, t = super().convert(x, t)
         t = self._identity[t.astype(int)]
         return x, t.astype(float)
+    @classmethod
+    def from_dict(cls, json_model: dict):
+        return cls(json_model["n_classes"], gamma=json_model["gamma"], dx=json_model["dx"])
 
 
 class MSELoss(Loss):

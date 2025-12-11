@@ -1,18 +1,23 @@
 #!/bin/bash
 set -eu
 
+# training
+python train_cat_cls.py
+python train_cat_rank.py
+python train_cat_reg.py
 python train_lgb_cls.py
-python train_lgb_reg.py
+python train_lgb_multi_task.py
 python train_lgb_rank.py
+python train_lgb_reg.py
 python train_xgb_cls.py
+python train_xgb_rank.py
 python train_xgb_reg.py
-python tune_lgb_parameter.py
-python tune_xgb_parameter.py
-python test_dumpload.py
 
-# # it's not supported
-# python train_lgb_multi_task.py
-# python train_lgb_tree_structure.py
+# tuning
+python tune_cat_parameter.py --dataset 2 --iter 10 --trial 10 --jobs 4
+python tune_lgb_parameter.py --dataset 2 --iter 10 --trial 10 --jobs 4
+python tune_xgb_parameter.py --dataset 2 --iter 10 --trial 10 --jobs 4
 
-# it's for GPU
-# python train_xgb_cls_gpu.py
+# nohup python tune_lgb_parameter.py --iter 500 --trial 50 --jobs 18 >> tune_lgb.log &
+# nohup python tune_xgb_parameter.py --iter 500 --trial 50 --jobs 18 >> tune_xgb.log &
+# nohup python tune_cat_parameter.py --iter 500 --trial 20 --jobs 18 >> tune_cat.log &

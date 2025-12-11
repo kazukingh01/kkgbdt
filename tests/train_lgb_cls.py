@@ -65,6 +65,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["BinaryCrossEntropyLoss_log"] = BinaryCrossEntropyLoss()(ndf_pred, (test_y == 1).astype(int))
     valeval["BinaryCrossEntropyLoss_acc"] = Accuracy(top_k=1)(ndf_pred, (test_y == 1).astype(int))
 
@@ -127,6 +128,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["CategoryCE_log"] = log_loss(test_y, ndf_pred)
     valeval["CategoryCE_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
@@ -140,6 +142,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["FocalLoss_log"] = log_loss(test_y, ndf_pred)
     valeval["FocalLoss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
@@ -153,6 +156,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["LogitMarginL1Loss_log"] = log_loss(test_y, ndf_pred)
     valeval["LogitMarginL1Loss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
@@ -170,6 +174,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["CrossEntropyLoss_log"] = log_loss(test_y, ndf_pred)
     valeval["CrossEntropyLoss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
@@ -187,6 +192,7 @@ if __name__ == "__main__":
     ndf_pred = model.predict(test_x)
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+    assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["CrossEntropyNDCGLoss_log"] = log_loss(test_y, ndf_pred)
     valeval["CrossEntropyNDCGLoss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 

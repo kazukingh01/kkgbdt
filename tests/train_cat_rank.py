@@ -18,7 +18,7 @@ if __name__ == '__main__':
     n_iter  = 200
 
     LOGGER.info("public loss rank", color=["BOLD", "UNDERLINE", "GREEN"])
-    model = KkGBDT(1, mode="cat", learning_rate=0.1, max_bin=64, max_depth=6)
+    model = KkGBDT(1, mode="cat", learning_rate=0.2, max_bin=64, max_depth=6)
     model.fit(
         train_x[:, 1:], train_y, loss_func="rank", num_iterations=n_iter,
         x_valid=valid_x[:, 1:], y_valid=valid_y, loss_func_eval="rank",
