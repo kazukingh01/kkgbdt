@@ -49,8 +49,8 @@ if __name__ == "__main__":
                 "max_depth"        : 8,
                 "min_child_samples": None,
                 "subsample"        : 1,
-                "colsample_bytree" : 1,
-                "colsample_bylevel": 1,
+                "colsample_bytree" : None,
+                "colsample_bynode" : None,  
                 "max_bin"          : 128,
                 "min_data_in_bin"  : None,
                 "reg_alpha"        : None,
@@ -60,8 +60,8 @@ if __name__ == "__main__":
                 "min_child_weight" : None,
             },
             params_search='''{
-                "colsample_bynode" : trial.suggest_float("colsample_bynode", 0.1, 0.9, log=False),
-                "reg_lambda"       : trial.suggest_float("lambda", 1e-4, 1e3, log=True),
+                "colsample_bylevel" : trial.suggest_float("colsample_bylevel", 0.1, 0.9, log=False),
+                "reg_lambda"        : trial.suggest_float("lambda", 1e-4, 1e3, log=True),
             }'''
         )
         study.optimize(func, n_trials=args.trial)

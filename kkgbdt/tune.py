@@ -86,5 +86,6 @@ def tune_parameter(
     )
     trial.set_user_attr("total_iteration", model.total_iteration)
     trial.set_user_attr("time_train",      model.time_train)
+    trial.set_user_attr("time_iter",       (model.time_train / model.total_iteration if model.total_iteration > 0 else float("nan")))
     LOGGER.info("END")
     return eval(eval_string, {}, (eval_string_dict | {"model": model, "np": np, "_x_valid": x_valid, "_y_valid": y_valid, "_group_valid": group_valid}))
