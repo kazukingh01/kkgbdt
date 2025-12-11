@@ -40,7 +40,7 @@ if __name__ == "__main__":
             mode="cat", num_class=n_class, n_jobs=args.jobs, eval_string='model.evals_result["validation"]["MultiClass"][model.best_iteration]',
             x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.iter,
             x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
-            early_stopping_rounds=5, early_stopping_idx=0,
+            early_stopping_rounds=20, early_stopping_idx=0,
             params_const = PARAMS_CONST_MODE["cat"],
             params_search='''{
                 "colsample_bylevel" : trial.suggest_float("colsample_bylevel", 0.1, 0.9, log=False),

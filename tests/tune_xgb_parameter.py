@@ -40,7 +40,7 @@ if __name__ == "__main__":
             mode="xgb", num_class=n_class, n_jobs=args.jobs, eval_string='model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration]',
             x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.iter,
             x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
-            early_stopping_rounds=5, early_stopping_idx=0,
+            early_stopping_rounds=20, early_stopping_idx=0,
             params_const = PARAMS_CONST_MODE["xgb"],
             params_search='''{
                 "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
