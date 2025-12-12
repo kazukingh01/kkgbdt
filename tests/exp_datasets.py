@@ -91,13 +91,14 @@ if __name__ == "__main__":
     reg = DatasetRegistry()
     for dataset_name in [LIST_DATASEET[i] for i in args.dataset]:
         LOGGER.info(f"Dataset: {dataset_name}...", color=["BOLD", "CYAN", "UNDERLINE"])
-        dataset = reg.create(dataset_name)
-        n_class = dataset.metadata.n_classes
-        LOGGER.info(f"{dataset.to_display()}")
         for seed in range(1, 6):
-            train_x, train_y, valid_x, valid_y, test_x, test_y = reg.create(dataset_name, seed=seed).load_data(
+            dataset = reg.create(dataset_name, seed=seed)
+            train_x, train_y, valid_x, valid_y, test_x, test_y = dataset.load_data(
                 format="numpy", split_type="valid", test_size=0.3, valid_size=0.2, 
             )
+            if seed == 1:
+                LOGGER.info(f"{dataset.to_display()}")
+            n_class = dataset.metadata.n_classes
             for mode in ["lgb", "xgb", "cat"]:
                 LOGGER.info(f"{mode} ( Default Params )", color=["BOLD", "GREEN"])
                 model = KkGBDT(n_class, mode=mode, n_jobs=args.jobs, **(PARAMS_CONST | PARAMS_CONST_MODE[mode]))
