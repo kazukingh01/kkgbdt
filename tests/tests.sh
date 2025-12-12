@@ -18,6 +18,6 @@ python tune_cat_parameter.py --dataset 2 --iter 10 --trial 10 --jobs 4
 python tune_lgb_parameter.py --dataset 2 --iter 10 --trial 10 --jobs 4
 python tune_xgb_parameter.py --dataset 2 --iter 10 --trial 10 --jobs 4
 
-# nohup python tune_lgb_parameter.py --iter 500 --trial 50 --jobs 18 >> tune_lgb.log &
-# nohup python tune_xgb_parameter.py --iter 500 --trial 50 --jobs 18 >> tune_xgb.log &
-# nohup python tune_cat_parameter.py --iter 500 --trial 20 --jobs 18 >> tune_cat.log &
+# nohup python tune_lgb_parameter.py --iter 500 --trial 40 --jobs 18 > nohup_tune_lgb.log &
+# nohup python tune_xgb_parameter.py --iter 500 --trial 40 --jobs 18 > nohup_tune_xgb.log &
+# nohup python tune_cat_parameter.py --iter 500 --trial 20 --jobs 18 > nohup_tune_cat.log &

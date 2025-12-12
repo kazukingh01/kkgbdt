@@ -94,7 +94,7 @@ if __name__ == "__main__":
         dataset = reg.create(dataset_name)
         n_class = dataset.metadata.n_classes
         LOGGER.info(f"{dataset.to_display()}")
-        for seed in range(1, 21):
+        for seed in range(1, 6):
             train_x, train_y, valid_x, valid_y, test_x, test_y = reg.create(dataset_name, seed=seed).load_data(
                 format="numpy", split_type="valid", test_size=0.3, valid_size=0.2, 
             )
