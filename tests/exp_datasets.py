@@ -1,4 +1,5 @@
 import argparse, datetime
+import optuna
 from kktestdata import DatasetRegistry
 from kkgbdt.model import KkGBDT
 from kkgbdt.functions import log_loss
@@ -59,39 +60,67 @@ PARAMS_CONST_MODE = {
     "xgb": PATAMS_CONST_XGB,
     "cat": PATAMS_CONST_CAT,
 }
+DICT_DB = {
+    "lgb": "params_lgb.db",
+    "xgb": "params_xgb.db",
+    "cat": "params_cat.db",
+}
 
 
 if __name__ == "__main__":
-    import wandb
     parser = argparse.ArgumentParser()
     parser.add_argument("--iter",    type=int, default=1000)
     parser.add_argument("--jobs",    type=int, default=8)
+    parser.add_argument("--nseed",   type=int, default=5)
     parser.add_argument("--dataset", type=lambda x: [int(y.strip()) for y in x.split(",")], default=",".join([str(i) for i in range(len(LIST_DATASEET))]))
-    parser.add_argument("--entity",  type=str,  required=True)
-    parser.add_argument("--project", type=str, required=True)
+    parser.add_argument("--entity",  type=str)
+    parser.add_argument("--project", type=str)
+    parser.add_argument("--isbest",  action="store_true")
     args = parser.parse_args()
     assert all(LIST_DATASEET[i] for i in args.dataset)
+    list_dataset = [LIST_DATASEET[i] for i in args.dataset]
 
     now = datetime.datetime.now()
-    run = wandb.init(
-        entity=args.entity,
-        project=args.project,
-        config={
-            "datasets": LIST_DATASEET,
-            "i_datasets": args.dataset,
-            "params_const": PARAMS_CONST,
-            "params_const_lgb": PATAMS_CONST_LGB,
-            "params_const_xgb": PATAMS_CONST_XGB,
-            "params_const_cat": PATAMS_CONST_CAT,
-            "iters": args.iter,
-            "jobs": args.jobs,
-        },
-    )
+    if args.project is not None:
+        import wandb
+        assert args.entity is not None
+        run = wandb.init(
+            entity=args.entity,
+            project=args.project,
+            config={
+                "datasets": list_dataset,
+                "i_datasets": args.dataset,
+                "params_const": PARAMS_CONST,
+                "params_const_lgb": PATAMS_CONST_LGB,
+                "params_const_xgb": PATAMS_CONST_XGB,
+                "params_const_cat": PATAMS_CONST_CAT,
+                "iters": args.iter,
+                "jobs": args.jobs,
+                "is_best": args.isbest,
+                "nseed": args.nseed,
+            },
+        )
 
+    # set training parameters
+    best_params = {"lgb": {}, "xgb": {}, "cat": {}}
+    for dataset_name in list_dataset:
+        for mode, filepath in DICT_DB.items():
+            if args.isbest:
+                study_name = f"params_{mode}_{dataset_name}"
+                study = optuna.load_study(study_name=study_name, storage=f"sqlite:///{filepath}")
+                best_params[mode][dataset_name] = (PARAMS_CONST | PARAMS_CONST_MODE[mode] | study.best_params)
+                LOGGER.info(
+                    f"Loaded best params for {mode}/{dataset_name}: {study.best_params}",
+                    color=["BOLD", "GREEN"]
+                )
+            else:
+                best_params[mode][dataset_name] = (PARAMS_CONST | PARAMS_CONST_MODE[mode])
+
+    # train models
     reg = DatasetRegistry()
-    for dataset_name in [LIST_DATASEET[i] for i in args.dataset]:
+    for dataset_name in list_dataset:
         LOGGER.info(f"Dataset: {dataset_name}...", color=["BOLD", "CYAN", "UNDERLINE"])
-        for seed in range(1, 6):
+        for seed in range(1, args.nseed + 1):
             dataset = reg.create(dataset_name, seed=seed)
             train_x, train_y, valid_x, valid_y, test_x, test_y = dataset.load_data(
                 format="numpy", split_type="valid", test_size=0.3, valid_size=0.2, 
@@ -109,14 +138,16 @@ if __name__ == "__main__":
                 )
                 ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
                 logloss  = log_loss(test_y, ndf_pred)
-                run.log({
-                    "dataset": dataset_name, "mode": mode, "seed": seed, "logloss": logloss, "params": "init",
-                    "best_iteration": model.best_iteration, "total_iteration": model.total_iteration,
-                    "time_train": model.time_train, "time_iter": model.time_train / model.total_iteration,
-                    "datetime": datetime.datetime.now(),
-                })
+                if args.project is not None:
+                    run.log({
+                        "dataset": dataset_name, "mode": mode, "seed": seed, "logloss": logloss, "params": "init",
+                        "best_iteration": model.best_iteration, "total_iteration": model.total_iteration,
+                        "time_train": model.time_train, "time_iter": model.time_train / model.total_iteration,
+                        "datetime": datetime.datetime.now(),
+                    })
 
-    wandb.finish()
+    if args.project is not None:
+        wandb.finish()
 
 
 

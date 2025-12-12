@@ -68,11 +68,13 @@ if __name__ == "__main__":
 
     # sidebar
     with st.sidebar:
-        selected_dataset = st.sidebar.selectbox(
-            "Select Dataset",
-            options=[str(f).replace("params_lgb_", "") for f in get_studies(MODE["lgb"])],
-            index=0
-        )
+        st.sidebar.markdown("**Select Datasets**")
+        list_datasets     = [str(f).replace("params_lgb_", "") for f in get_studies(MODE["lgb"])]
+        selected_datasets = [False] * len(list_datasets)
+        for i, dsname in enumerate(list_datasets):
+            selected_datasets[i] = st.sidebar.checkbox(dsname, value=False)
+        selected_datasets = [dsname for dsname, chk in zip(list_datasets, selected_datasets) if chk]
+
         st.sidebar.markdown("**Select Package**")
         selected_modes = [False] * len(MODE)
         for i, (mode, _) in enumerate(MODE.items()):
@@ -82,9 +84,13 @@ if __name__ == "__main__":
     # get data
     list_df = []
     for mode, conn in MODE.items():
-        dfwk = get_trial_data(conn, selected_dataset, prefix=f"params_{mode}_")
-        dfwk["mode"] = mode
-        list_df.append(dfwk)
+        for selected_dataset in selected_datasets:
+            dfwk = get_trial_data(conn, selected_dataset, prefix=f"params_{mode}_")
+            dfwk["dataset"] = selected_dataset
+            dfwk["mode"]    = mode
+            list_df.append(dfwk)
+    if len(list_df) == 0:
+        st.stop()
     df = pd.concat(list_df, axis=0, ignore_index=True)
 
     # display dataframe
