@@ -1,11 +1,11 @@
 [project]
 name = "kkgbdt"
-version = "1.4.2"
+version = "1.4.3"
 requires-python = ">= 3.12.2"
 description = "my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM, XGBoost, and CatBoost."
 dependencies = [
     'kklogger @ git+https://github.com/kazukingh01/kklogger.git@f6ddcc099da0102a14a62d67bede1b1c30eaf839',
-    'kktestdata @ git+https://github.com/kazukingh01/kktestdata.git@f7f77ddfc495d4e3dc6816badc8b2a4be965c535',
+    'kktestdata @ git+https://github.com/kazukingh01/kktestdata.git@37a74b754ed4896df8e9963c2a264b0ffa49858f',
     'pandas==2.2.3',
     'numpy==2.2.1',
     'optuna==4.1.0',
