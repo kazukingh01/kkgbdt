@@ -45,7 +45,7 @@ if __name__ == "__main__":
             params_search='''{
                 "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
                 "colsample_bynode" : trial.suggest_float("colsample_bynode", 0.1, 0.9, log=False),
-                "reg_lambda"       : trial.suggest_float("lambda", 1e-4, 1e3, log=True),
+                "reg_lambda"       : trial.suggest_float("reg_lambda", 1e-4, 1e3, log=True),
             }'''
         )
         study.optimize(func, n_trials=args.trial)

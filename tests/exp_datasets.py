@@ -107,10 +107,11 @@ if __name__ == "__main__":
         for mode, filepath in DICT_DB.items():
             if args.isbest:
                 study_name = f"params_{mode}_{dataset_name}"
-                study = optuna.load_study(study_name=study_name, storage=f"sqlite:///{filepath}")
-                best_params[mode][dataset_name] = (PARAMS_CONST | PARAMS_CONST_MODE[mode] | study.best_params)
+                study  = optuna.load_study(study_name=study_name, storage=f"sqlite:///{filepath}")
+                params = {("reg_lambda" if x == "lambda" else x): y for x, y in study.best_params.items()}
+                best_params[mode][dataset_name] = (PARAMS_CONST | PARAMS_CONST_MODE[mode] | params)
                 LOGGER.info(
-                    f"Loaded best params for {mode}/{dataset_name}: {study.best_params}",
+                    f"Loaded best params for {mode}/{dataset_name}: {params}",
                     color=["BOLD", "GREEN"]
                 )
             else:

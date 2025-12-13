@@ -44,7 +44,7 @@ if __name__ == "__main__":
             params_const = PARAMS_CONST_MODE["cat"],
             params_search='''{
                 "colsample_bylevel" : trial.suggest_float("colsample_bylevel", 0.1, 0.9, log=False),
-                "reg_lambda"        : trial.suggest_float("lambda", 1e-4, 1e3, log=True),
+                "reg_lambda"        : trial.suggest_float("reg_lambda", 1e-4, 1e3, log=True),
             }'''
         )
         study.optimize(func, n_trials=args.trial)
