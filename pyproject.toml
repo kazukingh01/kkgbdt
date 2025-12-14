@@ -1,6 +1,6 @@
 [project]
 name = "kkgbdt"
-version = "1.4.3"
+version = "1.4.4"
 requires-python = ">= 3.12.2"
 description = "my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM, XGBoost, and CatBoost."
 dependencies = [
@@ -21,6 +21,9 @@ dependencies = [
     'wandb==0.23.1',
     'weave==0.52.22',
 ]
+
+[project.optional-dependencies]
+polars = ["polars>=1.15.0"]
 
 [build-system]
 requires = ["setuptools>=64.0.0", "wheel"]

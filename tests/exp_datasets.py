@@ -30,6 +30,7 @@ PARAMS_CONST = {
     "min_split_gain"   : None,
     "path_smooth"      : None,
     "verbosity"        : None,
+    "is_softmax"       : None,
 }
 PATAMS_CONST_LGB = (PARAMS_CONST | {
     "num_leaves"       : (2 ** PARAMS_CONST["max_depth"]), # depth = 8
@@ -46,6 +47,7 @@ PATAMS_CONST_XGB = (PARAMS_CONST | {
     "colsample_bylevel": 1,
     "colsample_bynode" : 1,
     "reg_lambda"       : None,
+    "is_softmax"       : True,
 })
 PATAMS_CONST_CAT = (PARAMS_CONST | {
     "learning_rate"    : (PARAMS_CONST["learning_rate"] * 5.0),
@@ -130,7 +132,7 @@ if __name__ == "__main__":
                 LOGGER.info(f"{dataset.to_display()}")
             n_class = dataset.metadata.n_classes
             for mode in ["lgb", "xgb", "cat"]:
-                LOGGER.info(f"{mode} ( Default Params )", color=["BOLD", "GREEN"])
+                LOGGER.info(f"{mode} ( {'Best' if args.isbest else 'Default'} Params )", color=["BOLD", "GREEN"])
                 model = KkGBDT(n_class, mode=mode, n_jobs=args.jobs, **(best_params[mode][dataset_name]))
                 model.fit(
                     train_x, train_y, loss_func="multi", num_iterations=args.iter,
@@ -139,6 +141,7 @@ if __name__ == "__main__":
                 )
                 ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
                 logloss  = log_loss(test_y, ndf_pred)
+                LOGGER.info(f"{mode}: {logloss}", color=["BOLD", "GREEN"])
                 if args.project is not None:
                     run.log({
                         "dataset": dataset_name, "mode": mode, "seed": seed, "logloss": logloss, "params": "init",
@@ -149,6 +152,3 @@ if __name__ == "__main__":
 
     if args.project is not None:
         wandb.finish()
-
-
-

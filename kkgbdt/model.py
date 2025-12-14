@@ -191,11 +191,15 @@ class KkGBDT:
         if self.mode == "xgb":
             self.total_iteration += -1
         # best iteration
-        if self.mode in ["xgb", "lgb"]:
+        if self.mode == "xgb":
             try:
-                self.best_iteration = self.booster.best_iteration # This is counted from 0
+                self.best_iteration = self.booster.best_iteration
+                if self.best_iteration is not None and self.best_iteration > 0:
+                    self.best_iteration += 1
             except AttributeError:
-                self.best_iteration = num_iterations
+                self.best_iteration = 0
+        elif self.mode == "lgb":
+            self.best_iteration = self.booster.best_iteration # This is counted from 0
         else:
             self.best_iteration = self.booster.get_best_iteration()
         LOGGER.info(f"best iteration is {self.best_iteration}. # 0 means maximum iteration is selected.")
