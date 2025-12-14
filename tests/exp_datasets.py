@@ -42,6 +42,7 @@ PATAMS_CONST_LGB = (PARAMS_CONST | {
     "reg_lambda"       : None,
 })
 PATAMS_CONST_XGB = (PARAMS_CONST | {
+    "learning_rate"    : (PARAMS_CONST["learning_rate"] * 2.0),
     "min_child_weight" : None,
     "colsample_bytree" : 1,
     "colsample_bylevel": 1,
@@ -50,7 +51,7 @@ PATAMS_CONST_XGB = (PARAMS_CONST | {
     "is_softmax"       : True,
 })
 PATAMS_CONST_CAT = (PARAMS_CONST | {
-    "learning_rate"    : (PARAMS_CONST["learning_rate"] * 5.0),
+    "learning_rate"    : (PARAMS_CONST["learning_rate"] * 10.0),
     "min_child_weight" : None,
     "colsample_bytree" : 1, 
     "colsample_bylevel": 1,
@@ -71,7 +72,7 @@ DICT_DB = {
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--iter",    type=int, default=1000)
+    parser.add_argument("--iter",    type=int, default=10000)
     parser.add_argument("--jobs",    type=int, default=8)
     parser.add_argument("--nseed",   type=int, default=5)
     parser.add_argument("--dataset", type=lambda x: [int(y.strip()) for y in x.split(",")], default=",".join([str(i) for i in range(len(LIST_DATASEET))]))
