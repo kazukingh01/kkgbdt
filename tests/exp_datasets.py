@@ -134,7 +134,7 @@ if __name__ == "__main__":
             n_class = dataset.metadata.n_classes
             for mode in ["lgb", "xgb", "cat"]:
                 LOGGER.info(f"{mode} ( {'Best' if args.isbest else 'Default'} Params )", color=["BOLD", "GREEN"])
-                model = KkGBDT(n_class, mode=mode, n_jobs=args.jobs, **(best_params[mode][dataset_name]))
+                model = KkGBDT(n_class, mode=mode, n_jobs=args.jobs, **(best_params[mode][dataset_name] | {"random_seed": seed}))
                 model.fit(
                     train_x, train_y, loss_func="multi", num_iterations=args.iter,
                     x_valid=valid_x, y_valid=valid_y, sample_weight="balanced",

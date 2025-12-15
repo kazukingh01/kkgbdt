@@ -44,7 +44,7 @@ if __name__ == "__main__":
             params_const = PARAMS_CONST_MODE["xgb"],
             params_search='''{
                 "min_child_weight" : trial.suggest_float("min_child_weight", 1e-4, 1e3, log=True),
-                "colsample_bynode" : trial.suggest_float("colsample_bynode", 0.1, 0.9, log=False),
+                "colsample_bynode" : trial.suggest_float("colsample_bynode", 0.1, 1.0, log=False),
                 "reg_lambda"       : trial.suggest_float("reg_lambda", 1e-4, 1e3, log=True),
             }'''
         )

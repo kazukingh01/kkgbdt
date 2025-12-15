@@ -645,11 +645,11 @@ def alias_parameters(
         params["eta"]         = learning_rate
         params["max_leaves"]  = num_leaves
         params["nthread"]     = n_jobs
+        params["booster"]     = "gbtree" # "dart", "gblinear"
         params["tree_method"] = "hist"
         params["device"]      = "cuda" if is_gpu else "cpu"
         params["seed"]        = random_seed
         params["max_depth"]   = 0 if max_depth <= 0 else max_depth
-        # min_child_samples is not in configlation
         params["min_child_weight"]  = min_child_weight
         params["subsample"]         = subsample
         params["colsample_bytree"]  = colsample_bytree
@@ -662,8 +662,7 @@ def alias_parameters(
         params["verbosity"]         = 0 if verbosity is None else verbosity
         params["grow_policy"]       = "depthwise"
         params["multi_strategy"]    = "one_output_per_tree" if multi_strategy is None else multi_strategy
-        # min_data_in_bin is not in configlation
-        for x in ["min_child_weight", "min_data_in_bin", "path_smooth"]:
+        for x in ["min_child_samples", "min_data_in_bin", "path_smooth"]:
             if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
     elif mode == "lgb":
         params["num_class"]               = num_class
@@ -675,6 +674,9 @@ def alias_parameters(
             params["gpu_platform_id"]     = 0
             params["gpu_device_id"]       = 0
         params["seed"]                    = random_seed
+        params["feature_fraction_seed"]   = random_seed # for feature_fraction
+        params["extra_trees"]             = False
+        params["extra_seed"]              = random_seed # for extra_trees
         params["max_depth"]               = -1 if max_depth <= 0 else max_depth
         params["min_data_in_leaf"]        = min_child_samples
         params["min_sum_hessian_in_leaf"] = min_child_weight
@@ -682,7 +684,6 @@ def alias_parameters(
         if subsample is not None and subsample != 1:
             params["bagging_freq"]        = 1
         params["feature_fraction"]        = colsample_bytree
-        # colsample_bylevel is not in configlation
         params["feature_fraction_bynode"] = colsample_bynode
         params["lambda_l1"]               = reg_alpha
         params["lambda_l2"]               = reg_lambda
@@ -690,6 +691,8 @@ def alias_parameters(
         params["max_bin"]                 = max_bin - 1
         params["min_data_in_bin"]         = min_data_in_bin
         params["path_smooth"]             = path_smooth
+        params["booster"]                 = "gbdt" # "rf", "dart"
+        params["deterministic"]           = False # https://lightgbm.readthedocs.io/en/stable/Parameters.html#deterministic
         if path_smooth is not None and path_smooth > 0.0:
             assert params["min_data_in_leaf"] >= 2
         params["verbosity"]               = -1 if verbosity is None else verbosity

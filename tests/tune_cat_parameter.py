@@ -43,7 +43,7 @@ if __name__ == "__main__":
             early_stopping_rounds=20, early_stopping_idx=0,
             params_const = PARAMS_CONST_MODE["cat"],
             params_search='''{
-                "colsample_bylevel" : trial.suggest_float("colsample_bylevel", 0.1, 0.9, log=False),
+                "colsample_bylevel" : trial.suggest_float("colsample_bylevel", 0.1, 1.0, log=False),
                 "reg_lambda"        : trial.suggest_float("reg_lambda", 1e-4, 1e3, log=True),
             }'''
         )
