@@ -42,6 +42,7 @@ if __name__ == "__main__":
     parser.add_argument("--min_split_gain",   type=float, default=None)
     parser.add_argument("--grow_policy",      type=str,   default=None)
     # tuning target
+    parser.add_argument("--filepath",         type=str,   default="params.db")
     parser.add_argument(
         "--tunings", type=lambda x: [y.strip() for y in x.split(",")],
         default="min_child_weight,reg_lambda,colsample_bynode,subsample"
@@ -90,9 +91,10 @@ if __name__ == "__main__":
             "cat":          '"grow_policy"      : trial.suggest_categorical("grow_policy", ["depthwise", "lossguide", "symmetric"])',
         }[args.mode]
     }[x] for x in args.tunings]
-    filepath = "params.db"
+    filepath = args.filepath
 
     # dataset loop
+    list_df = []
     reg = DatasetRegistry()
     assert all([reg.create(x).metadata.supported_task == "multiclass" for x in args.dataset])
     for dataset_name in args.dataset:
@@ -148,20 +150,22 @@ if __name__ == "__main__":
                     logloss  = log_loss(test_y, ndf_pred)
                     list_prediction.append(ndf_pred)
                     list_eval.append({
-                        "loop": i_loop, "fold": i_fold, "cv": i_cv, "train": len(idx_train), "valid": len(idx_valid), 
+                        "dataset": dataset_name, "loop": i_loop, "fold": i_fold, "cv": i_cv, "train": len(idx_train), "valid": len(idx_valid), 
                         "test": len(idx_test), "is_ensemble": False, "eval": logloss,
                     })
-                    LOGGER.info(f"loop={i_loop} fold={i_fold} cv={i_cv} train={len(idx_train)} valid={len(idx_valid)} test={len(idx_test)} eval={logloss}", color=["BOLD", "CYAN"])
+                    LOGGER.info(f"dataset={dataset_name} loop={i_loop} fold={i_fold} cv={i_cv} train={len(idx_train)} valid={len(idx_valid)} test={len(idx_test)} eval={logloss}", color=["BOLD", "CYAN"])
                 ndf_pred = np.stack(list_prediction).mean(axis=0)
                 logloss  = log_loss(test_y, ndf_pred)
                 list_eval.append({
-                    "loop": i_loop, "fold": i_fold, "cv": None, "train": None, "valid": None, 
+                    "dataset": dataset_name, "loop": i_loop, "fold": i_fold, "cv": None, "train": None, "valid": None, 
                     "test": len(idx_test), "is_ensemble": True, "eval": logloss,
                 })
-                LOGGER.info(f"loop={i_loop} fold={i_fold} test={len(idx_test)} eval (ensemble score)={logloss}", color=["BOLD", "CYAN"])
+                LOGGER.info(f"dataset={dataset_name} loop={i_loop} fold={i_fold} test={len(idx_test)} eval (ensemble score)={logloss}", color=["BOLD", "CYAN"])
 
         # Print results
         df = pd.DataFrame(list_eval)
         if df.shape[0] > 0:
-            LOGGER.info(f"Mean: {df.loc[df['is_ensemble'] == True, 'eval'].mean()}", color=["BOLD", "GREEN"])
+            list_df.append(df.copy())
+            LOGGER.info(f"dataset={dataset_name} Mean: {df.loc[df['is_ensemble'] == True, 'eval'].mean()}", color=["BOLD", "GREEN"])
             LOGGER.info(f"\n{df.to_string(index=False)}")
+    pd.concat(list_df, ignore_index=True).to_csv(f"{filepath}.{args.mode}.csv", index=False)
