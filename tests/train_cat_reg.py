@@ -67,7 +67,7 @@ if __name__ == "__main__":
     valeval["huber_rmse"] = rmse(test_y, ndf_pred)
 
     LOGGER.info("custom loss MSELoss", color=["BOLD", "UNDERLINE", "GREEN"])
-    model = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+    model = KkGBDT(n_class, mode="cat", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, reg_lambda=1e-3)
     model.fit(
         train_x, train_y, loss_func=MSELoss(), num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["__copy__", "reg"],

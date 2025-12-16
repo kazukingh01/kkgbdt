@@ -66,14 +66,15 @@ class ParamsTraining:
 class KkGBDT:
     def __init__(
         self, num_class: int, mode: str="xgb", is_softmax: bool=None, 
-        learning_rate: float=0.1, num_leaves: int=None, n_jobs: int=-1, is_gpu: bool=False, 
-        random_seed: int=0, max_depth: int=6, min_child_samples: int=20, min_child_weight: float=1e-3,
-        subsample: float=1, colsample_bytree: float=0.5, colsample_bylevel: float=1, colsample_bynode: float=1,
-        reg_alpha: float=0, reg_lambda: float=0, min_split_gain: float=0, max_bin: int=256, 
-        min_data_in_bin: int=5, path_smooth: float=0.0, multi_strategy: str=None, verbosity: None | int=None, **kwargs
+        learning_rate: float=0.1, num_leaves: int | None=None, n_jobs: int=-1, is_gpu: bool=False, 
+        random_seed: int=0, max_depth: int | None=6, min_child_samples: int | None=None, min_child_weight: float | None=None,
+        subsample: float | None=None, colsample_bytree: float | None=None, colsample_bylevel: float | None=None, colsample_bynode: float | None=None,
+        reg_alpha: float | None=None, reg_lambda: float | None=None, min_split_gain: float | None=None, max_bin: int=256, 
+        min_data_in_bin: int=5, path_smooth: float | None=None, multi_strategy: str | None=None, 
+        grow_policy: str | None=None, verbosity: int | None=None, **kwargs
     ):
         LOGGER.info("START")
-        assert isinstance(mode, str) and mode in ["xgb", "lgb", "cat"]
+        check_mode(mode)
         assert is_softmax is None or isinstance(is_softmax, bool)
         self.booster = None
         self.mode    = mode
@@ -82,7 +83,8 @@ class KkGBDT:
             random_seed=random_seed, max_depth=max_depth, min_child_samples=min_child_samples, min_child_weight=min_child_weight,
             subsample=subsample, colsample_bytree=colsample_bytree, colsample_bylevel=colsample_bylevel,
             colsample_bynode=colsample_bynode, reg_alpha=reg_alpha, reg_lambda=reg_lambda, min_split_gain=min_split_gain,
-            max_bin=max_bin, min_data_in_bin=min_data_in_bin, path_smooth=path_smooth, multi_strategy=multi_strategy, verbosity=verbosity
+            max_bin=max_bin, min_data_in_bin=min_data_in_bin, path_smooth=path_smooth, multi_strategy=multi_strategy, 
+            grow_policy=grow_policy, verbosity=verbosity
         )
         self.params.update(copy.deepcopy(kwargs))
         self.params_pkg          = {}
@@ -609,12 +611,12 @@ def _train_cat(p: ParamsTraining, evals_result: dict = None):
 def alias_parameters(
     mode: str="xgb",
     num_class: int=None, learning_rate: float=None, n_jobs: int=None, is_gpu: bool=None, 
-    max_bin: int=None, random_seed: int=0, max_depth: int=None, num_leaves: int | None=None, 
+    max_bin: int=None, random_seed: int=0, max_depth: int | None=None, num_leaves: int | None=None, 
     min_child_samples: int | None=None, min_child_weight: float | None=None, subsample: float | None=None,
     colsample_bytree: float | None=None, colsample_bylevel: float | None=None, colsample_bynode: float | None=None,
     reg_alpha: float | None=None, reg_lambda: float | None=None,
     min_split_gain: float | None=None, min_data_in_bin: int | None=None, path_smooth: float | None=None, 
-    multi_strategy: str | None=None, verbosity: int | None=None,
+    multi_strategy: str | None=None, grow_policy: str | None=None, verbosity: int | None=None,
 ) -> dict[str, Any]:
     LOGGER.info(f"START. mode={mode}")
     check_mode(mode)
@@ -624,7 +626,7 @@ def alias_parameters(
     assert isinstance(is_gpu, bool)
     assert isinstance(max_bin, int) and max_bin >= 4
     assert isinstance(random_seed, int) and random_seed >= 0
-    assert isinstance(max_depth, int) and max_depth >= -1
+    assert max_depth         is None or (isinstance(max_depth, int) and max_depth >= -1)
     assert num_leaves        is None or (isinstance(num_leaves, int) and num_leaves >= 0)
     assert min_child_samples is None or (isinstance(min_child_samples, int) and min_child_samples > 0)
     assert min_child_weight  is None or (check_type(min_child_weight, [float, int]) and min_child_weight >= 1e-5)
@@ -638,6 +640,7 @@ def alias_parameters(
     assert min_data_in_bin   is None or (isinstance(min_data_in_bin, int) and min_data_in_bin >= 1)
     assert path_smooth       is None or (check_type(path_smooth, [int, float]) and path_smooth >= 0)
     assert multi_strategy    is None or (multi_strategy in ["one_output_per_tree", "multi_output_tree"])
+    assert grow_policy       is None or (isinstance(grow_policy, str) and grow_policy in ["depthwise", "lossguide", "symmetric"])
     assert verbosity         is None or (isinstance(verbosity, int) and verbosity >= 0)
     params = {}
     if mode == "xgb":
@@ -660,8 +663,9 @@ def alias_parameters(
         params["gamma"]             = min_split_gain # Maybe different from xgb and lgb
         params["max_bin"]           = max_bin
         params["verbosity"]         = 0 if verbosity is None else verbosity
-        params["grow_policy"]       = "depthwise"
         params["multi_strategy"]    = "one_output_per_tree" if multi_strategy is None else multi_strategy
+        assert grow_policy is None or (grow_policy in ["depthwise", "lossguide"])
+        params["grow_policy"]       = "depthwise" if grow_policy is None else grow_policy
         for x in ["min_child_samples", "min_data_in_bin", "path_smooth"]:
             if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
     elif mode == "lgb":
@@ -696,7 +700,7 @@ def alias_parameters(
         if path_smooth is not None and path_smooth > 0.0:
             assert params["min_data_in_leaf"] >= 2
         params["verbosity"]               = -1 if verbosity is None else verbosity
-        for x in ["colsample_bylevel", "multi_strategy"]:
+        for x in ["colsample_bylevel", "multi_strategy", "grow_policy"]:
             if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
     else:
         params["classes_count"]       = num_class
@@ -717,6 +721,10 @@ def alias_parameters(
         params["border_count"]        = max_bin
         params["allow_writing_files"] = False
         params["bootstrap_type"]      = "Bernoulli"
+        if grow_policy is None:
+            params["grow_policy"]     = "SymmetricTree"
+        else:
+            params["grow_policy"]     = {"depthwise": "Depthwise", "lossguide": "Lossguide", "symmetric": "SymmetricTree"}[grow_policy]
         params["use_best_model"]      = True
         params["od_type"]             = "Iter"
         if verbosity is None or verbosity <= 0:

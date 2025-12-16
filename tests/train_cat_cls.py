@@ -19,9 +19,9 @@ if __name__ == "__main__":
     )
     n_class = dataset.metadata.n_classes
     n_iter  = 100
-    lr      = 0.2
+    lr      = 1.0
     max_bin = 64
-    ndepth  = 6
+    ndepth  = 7
     valeval = {}
     LOGGER.info("data train", color=["BOLD", "CYAN"])
     LOGGER.info(f"\n{pd.DataFrame(train_y).groupby(0).size()}")
