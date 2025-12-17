@@ -41,6 +41,7 @@ if __name__ == "__main__":
     parser.add_argument("--reg_lambda",       type=float, default=None)
     parser.add_argument("--min_split_gain",   type=float, default=None)
     parser.add_argument("--grow_policy",      type=str,   default=None)
+    parser.add_argument("--is_extratree",     action="store_true", default=None)
     # tuning target
     parser.add_argument("--filepath",         type=str,   default="params.db")
     parser.add_argument(
@@ -70,6 +71,7 @@ if __name__ == "__main__":
         "min_split_gain"   : args.min_split_gain,
         "path_smooth"      : None,
         "grow_policy"      : args.grow_policy,
+        "is_extratree"     : args.is_extratree,
         "verbosity"        : None,
         "is_softmax"       : True if args.mode == "xgb" else None,
     }
@@ -99,36 +101,41 @@ if __name__ == "__main__":
     assert all([reg.create(x).metadata.supported_task == "multiclass" for x in args.dataset])
     for dataset_name in args.dataset:
         dataset = reg.create(dataset_name, seed=args.random_seed)
-        LOGGER.info(f"Tuning {dataset_name}...", color=["BOLD", "CYAN", "UNDERLINE"])
-        # Tuning
-        train_x, train_y, valid_x, valid_y = dataset.load_data(format="numpy", split_type="test", test_size=0.3333)
-        n_class = dataset.metadata.n_classes
-        sampler = optuna.samplers.TPESampler()
-        try: optuna.delete_study(study_name=f"{args.mode}_{dataset_name}", storage=f'sqlite:///{filepath}')
-        except KeyError: pass
-        study   = optuna.create_study(study_name=f"{args.mode}_{dataset_name}", storage=f'sqlite:///{filepath}', sampler=sampler, directions=["minimize"])
-        func    = partial(tune_parameter,
-            mode=args.mode, num_class=n_class, n_jobs=args.jobs, eval_string={
-                'lgb': 'model.booster.best_score["valid_0"]["multi_logloss"]',
-                'xgb': 'model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration]',
-                'cat': 'model.evals_result["validation"]["MultiClass"][model.best_iteration]',
-            }[args.mode],
-            x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.iter,
-            x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
-            early_stopping_rounds=20, early_stopping_idx=0,
-            params_const  = params_const,
-            params_search = "{" + ",".join(list_params_search) + "}",
-        )
-        study.optimize(func, n_trials=args.trial)
-        dictwk = {i: x.values[0] for i, x in enumerate(study.get_trials())}
-        LOGGER.info(
-            f"\nRESULT VALUES:\n{json.dumps({x:float(y) for x, y in dictwk.           items()}, indent=2)}\n" + 
-            f"BEST PARAMETERS:\n{json.dumps({x:float(y) for x, y in study.best_params.items()}, indent=2)}",
-            color=["BOLD", "GREEN"]
-        )
+        if args.trial > 0:
+            # Tuning
+            LOGGER.info(f"Tuning {dataset_name}...", color=["BOLD", "CYAN", "UNDERLINE"])
+            train_x, train_y, valid_x, valid_y = dataset.load_data(format="numpy", split_type="test", test_size=0.3333)
+            n_class = dataset.metadata.n_classes
+            sampler = optuna.samplers.TPESampler()
+            try: optuna.delete_study(study_name=f"{args.mode}_{dataset_name}", storage=f'sqlite:///{filepath}')
+            except KeyError: pass
+            study   = optuna.create_study(study_name=f"{args.mode}_{dataset_name}", storage=f'sqlite:///{filepath}', sampler=sampler, directions=["minimize"])
+            func    = partial(tune_parameter,
+                mode=args.mode, num_class=n_class, n_jobs=args.jobs, eval_string={
+                    'lgb': 'model.booster.best_score["valid_0"]["multi_logloss"]',
+                    'xgb': 'model.evals_result["valid_0"]["mlogloss"][model.booster.best_iteration]',
+                    'cat': 'model.evals_result["validation"]["MultiClass"][model.best_iteration]',
+                }[args.mode],
+                x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.iter,
+                x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
+                early_stopping_rounds=20, early_stopping_idx=0,
+                params_const  = params_const,
+                params_search = "{" + ",".join(list_params_search) + "}",
+            )
+            study.optimize(func, n_trials=args.trial)
+            dictwk = {i: x.values[0] for i, x in enumerate(study.get_trials())}
+            LOGGER.info(
+                f"\nRESULT VALUES:\n{json.dumps({x:float(y) for x, y in dictwk.           items()}, indent=2)}\n" + 
+                f"BEST PARAMETERS:\n{json.dumps({x:float(y) for x, y in study.best_params.items()}, indent=2)}",
+                color=["BOLD", "GREEN"]
+            )
+        else:
+            class Tmp(): best_params = {}
+            study = Tmp()
 
         # Training
         data_x, data_y = dataset.load_data(format="numpy", split_type="train")
+        n_class = dataset.metadata.n_classes
         list_eval = []
         for i_loop in range(args.nloop):
             cv1st = StratifiedKFold(n_splits=args.nfold, shuffle=True, random_state=args.random_seed + i_loop)

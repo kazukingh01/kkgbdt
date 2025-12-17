@@ -71,7 +71,7 @@ class KkGBDT:
         subsample: float | None=None, colsample_bytree: float | None=None, colsample_bylevel: float | None=None, colsample_bynode: float | None=None,
         reg_alpha: float | None=None, reg_lambda: float | None=None, min_split_gain: float | None=None, max_bin: int=256, 
         min_data_in_bin: int=5, path_smooth: float | None=None, multi_strategy: str | None=None, 
-        grow_policy: str | None=None, verbosity: int | None=None, **kwargs
+        grow_policy: str | None=None, is_extratree: bool | None=None, verbosity: int | None=None, **kwargs
     ):
         LOGGER.info("START")
         check_mode(mode)
@@ -84,7 +84,7 @@ class KkGBDT:
             subsample=subsample, colsample_bytree=colsample_bytree, colsample_bylevel=colsample_bylevel,
             colsample_bynode=colsample_bynode, reg_alpha=reg_alpha, reg_lambda=reg_lambda, min_split_gain=min_split_gain,
             max_bin=max_bin, min_data_in_bin=min_data_in_bin, path_smooth=path_smooth, multi_strategy=multi_strategy, 
-            grow_policy=grow_policy, verbosity=verbosity
+            grow_policy=grow_policy, is_extratree=is_extratree, verbosity=verbosity
         )
         self.params.update(copy.deepcopy(kwargs))
         self.params_pkg          = {}
@@ -616,7 +616,7 @@ def alias_parameters(
     colsample_bytree: float | None=None, colsample_bylevel: float | None=None, colsample_bynode: float | None=None,
     reg_alpha: float | None=None, reg_lambda: float | None=None,
     min_split_gain: float | None=None, min_data_in_bin: int | None=None, path_smooth: float | None=None, 
-    multi_strategy: str | None=None, grow_policy: str | None=None, verbosity: int | None=None,
+    multi_strategy: str | None=None, grow_policy: str | None=None, is_extratree: bool | None=None, verbosity: int | None=None,
 ) -> dict[str, Any]:
     LOGGER.info(f"START. mode={mode}")
     check_mode(mode)
@@ -641,6 +641,7 @@ def alias_parameters(
     assert path_smooth       is None or (check_type(path_smooth, [int, float]) and path_smooth >= 0)
     assert multi_strategy    is None or (multi_strategy in ["one_output_per_tree", "multi_output_tree"])
     assert grow_policy       is None or (isinstance(grow_policy, str) and grow_policy in ["depthwise", "lossguide", "symmetric"])
+    assert is_extratree      is None or (isinstance(is_extratree, bool))
     assert verbosity         is None or (isinstance(verbosity, int) and verbosity >= 0)
     params = {}
     if mode == "xgb":
@@ -666,7 +667,7 @@ def alias_parameters(
         params["multi_strategy"]    = "one_output_per_tree" if multi_strategy is None else multi_strategy
         assert grow_policy is None or (grow_policy in ["depthwise", "lossguide"])
         params["grow_policy"]       = "depthwise" if grow_policy is None else grow_policy
-        for x in ["min_child_samples", "min_data_in_bin", "path_smooth"]:
+        for x in ["min_child_samples", "min_data_in_bin", "path_smooth", "is_extratree"]:
             if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
     elif mode == "lgb":
         params["num_class"]               = num_class
@@ -679,7 +680,7 @@ def alias_parameters(
             params["gpu_device_id"]       = 0
         params["seed"]                    = random_seed
         params["feature_fraction_seed"]   = random_seed # for feature_fraction
-        params["extra_trees"]             = False
+        params["extra_trees"]             = is_extratree
         params["extra_seed"]              = random_seed # for extra_trees
         params["max_depth"]               = -1 if max_depth <= 0 else max_depth
         params["min_data_in_leaf"]        = min_child_samples
@@ -735,7 +736,7 @@ def alias_parameters(
             params["logging_level"]   = "Verbose"
         for x in [
             "min_child_weight", "colsample_bytree", "colsample_bynode", "reg_alpha",
-            "min_split_gain", "min_data_in_bin", "path_smooth", "multi_strategy",
+            "min_split_gain", "min_data_in_bin", "path_smooth", "multi_strategy", "is_extratree"
         ]:
             if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
     _params = {}
