@@ -1,7 +1,9 @@
 # kkgbdt
 
 ## Setup LightGBM GPU
+
 see: https://lightgbm.readthedocs.io/en/latest/GPU-Tutorial.html
+
 ```bash
 sudo docker pull nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04
 sudo docker run -itd --gpus all --name cuda --net=nw -e DISPLAY=unix$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw --device /dev/dri -v /home/share:/home/share -v /home/backup:/home/backup --shm-size=10g nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04 /bin/bash --login
@@ -29,4 +31,22 @@ cd python-package/
 python setup.py install --precompile
 cd ..
 mkdir -p /etc/OpenCL/vendors && echo "http://libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd # see: https://github.com/microsoft/LightGBM/issues/586
+```
+
+## Setup Custom LightGBM
+
+```bash
+git clone https://github.com/kazukingh01/LightGBM.git
+cd LightGBM
+git submodule update --init --recursive
+mkdir -p build
+cd build
+sudo apt update && sudo apt install cmake
+cmake ..
+make -j$(nproc)
+cd ../
+sh ./build-python.sh install --precompile
+
+sh ./build-python.sh bdist_wheel
+pip install dist/lightgbm-*.whl --force-reinstall
 ```

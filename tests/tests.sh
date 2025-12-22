@@ -28,6 +28,13 @@ python tune_xgb_parameter.py --dataset 2 --iter 10 --trial 10 --jobs 4
 exit 0
 
 python train_dataset.py \
-    --mode lgb --dataset SDSS17 --iter 1000 --trial 40 --jobs 18 --random_seed 1 --nfold 3 --ncv 8 \
+    --mode lgb --dataset SDSS17,gas-drift --iter 1000 --trial 40 --jobs 18 --random_seed 1 --nloop 3 --nfold 3 --ncv 8 \
     --learning_rate 0.02 --num_leaves 256 --max_depth -1 --min_child_samples 5 \
-    --colsample_bytree 1 --colsample_bylevel 1 --max_bin 128 --reg_alpha 0 
+    --colsample_bytree 1 --colsample_bylevel 1 --max_bin 128 --reg_alpha 0 \
+    --tunings min_child_weight,reg_lambda,colsample_bytree,subsample
+
+python train_dataset.py \
+    --mode xgb --dataset SDSS17,gas-drift --iter 1000 --trial 40 --jobs 18 --random_seed 1 --nloop 3 --nfold 3 --ncv 8 \
+    --learning_rate 0.02 --max_depth 8 --min_child_samples 5 --glow_policy depthwise \
+    --colsample_bytree 1 --colsample_bylevel 1 --max_bin 128 --reg_alpha 0 \
+    --tunings min_child_weight,reg_lambda,colsample_bylevel,subsample

@@ -108,6 +108,16 @@ if __name__ == "__main__":
     )
     pred_lgb = ins_lgb.predict(test_x)
     print("LightGBM multi-class acc:", eval_multiclass(test_y, pred_lgb))
+    try:
+        ins_lgb  = lgb.train(
+            PARAMS_LGB | {"objective": "focalloss", "num_class": num_class, "metric": ["focalloss", "multi_logloss"], "focal_gamma": 0.5},
+            ds_lgb_train, num_boost_round=100, valid_sets=[ds_lgb_valid], callbacks=CALLBACKS_LGB,
+        )
+        pred_lgb = ins_lgb.predict(test_x)
+        print("LightGBM focalloss acc:", eval_multiclass(test_y, pred_lgb))
+    except lgb.basic.LightGBMError:
+        print("If you want to use focal loss, see readme and have to install my custom LightGBM module.")
+
     ## XGBoost
     ds_xgb_train = xgb.DMatrix(train_x, label=train_y)
     ds_xgb_valid = xgb.DMatrix(valid_x, label=valid_y)
