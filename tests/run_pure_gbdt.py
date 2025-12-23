@@ -90,7 +90,6 @@ if __name__ == "__main__":
     pred_cb = ins_cb.predict(cb.Pool(test_x), prediction_type="Probability")
     print("CatBoost binary acc:", eval_binary(test_y, pred_cb[:, 1]))
 
-
     # multi-class
     dataset = reg.create("gas-drift")
     train_x, train_y, valid_x, valid_y, test_x, test_y = dataset.load_data(

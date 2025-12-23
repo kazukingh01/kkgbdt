@@ -197,3 +197,16 @@ if __name__ == "__main__":
     valeval["CrossEntropyNDCGLoss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
     LOGGER.info(f"{json.dumps({x:float(y) for x, y in valeval.items()}, indent=2)}")
+
+    # test for save dataset
+    model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, save_dataset="test")
+    model.fit(
+        train_x, train_y, loss_func="multi", num_iterations=n_iter,
+        x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multi", Accuracy(top_k=2)], sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0,
+    )
+    model.fit(
+        "test.train.bin", None, loss_func="multi", num_iterations=n_iter,
+        x_valid="test.valid0.bin", y_valid=None, loss_func_eval=["multi", Accuracy(top_k=2)], sample_weight="balanced",
+        early_stopping_rounds=20, early_stopping_idx=0,
+    )

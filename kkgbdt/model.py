@@ -42,12 +42,12 @@ class ParamsTraining:
     params: dict
     num_iterations: int
     # training data & loss
-    x_train: np.ndarray
-    y_train: np.ndarray
+    x_train: np.ndarray | str
+    y_train: np.ndarray | None
     loss_func: str | Loss
     # validation data & loss
-    x_valid: np.ndarray | list[np.ndarray]=None
-    y_valid: np.ndarray | list[np.ndarray]=None
+    x_valid: np.ndarray | list[np.ndarray] | str | list[str] | None=None
+    y_valid: np.ndarray | list[np.ndarray] | None=None
     loss_func_eval: str | Loss | list[str | Loss]=None
     # early stopping parameter
     early_stopping_rounds: int=None
@@ -65,7 +65,7 @@ class ParamsTraining:
 
 class KkGBDT:
     def __init__(
-        self, num_class: int, mode: str="xgb", is_softmax: bool=None, 
+        self, num_class: int, mode: str="xgb", is_softmax: bool=None, save_dataset: str=None,
         learning_rate: float=0.1, num_leaves: int | None=None, n_jobs: int=-1, is_gpu: bool=False, 
         random_seed: int=0, max_depth: int | None=6, min_child_samples: int | None=None, min_child_weight: float | None=None,
         subsample: float | None=None, colsample_bytree: float | None=None, colsample_bylevel: float | None=None, colsample_bynode: float | None=None,
@@ -75,7 +75,8 @@ class KkGBDT:
     ):
         LOGGER.info("START")
         check_mode(mode)
-        assert is_softmax is None or isinstance(is_softmax, bool)
+        assert is_softmax   is None or isinstance(is_softmax, bool)
+        assert save_dataset is None or isinstance(save_dataset, str)
         self.booster = None
         self.mode    = mode
         self.params  = alias_parameters(
@@ -98,11 +99,12 @@ class KkGBDT:
         self.loss                = None
         self.inference           = None
         self.booster             = None
+        self.save_dataset        = save_dataset
         if mode == "xgb":
             self.train_func   = _train_xgb
             self.predict_func = self.predict_xgb
         elif mode == "lgb":
-            self.train_func   = _train_lgb
+            self.train_func   = partial(_train_lgb, save_dataset=self.save_dataset)
             self.predict_func = self.predict_lgb
         else:
             self.train_func   = _train_cat
@@ -120,7 +122,7 @@ class KkGBDT:
                 setattr(instance.booster, x, copy.deepcopy(getattr(self.booster, x)))
         return instance
     def fit(
-        self, x_train: np.ndarray, y_train: np.ndarray, loss_func: str | Loss=None, num_iterations: int=None,
+        self, x_train: np.ndarray, y_train: np.ndarray | None, loss_func: str | Loss=None, num_iterations: int=None,
         x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
         loss_func_eval: str | Loss | list[str | Loss]=None, early_stopping_rounds: int=None, early_stopping_idx: int | str=None,
         train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
@@ -132,6 +134,8 @@ class KkGBDT:
         check_other(self.params, num_iterations, self.evals_result)
         # check inputs & convert
         x_train, y_train, x_valid, y_valid = check_inputs(x_train, y_train, x_valid, y_valid)
+        if isinstance(x_train, str):
+            assert self.mode == "lgb"
         # check loss function & convert
         loss_func, loss_func_eval = check_loss_func(loss_func, self.mode, loss_func_eval, x_valid)
         self.loss = loss_func
@@ -143,7 +147,7 @@ class KkGBDT:
         if isinstance(self.loss, Loss) and hasattr(self.loss, "inference"):
             self.inference = self.loss.inference
         # check sample weight & convert
-        if sample_weight is not None:
+        if sample_weight is not None and y_train is not None:
             sample_weight = check_and_compute_sample_weight(sample_weight, y_train)
         # check early stopping
         if len(x_valid) == 0:
@@ -452,7 +456,7 @@ def _train_xgb(p: ParamsTraining, evals_result: dict = None):
     return model
 
 
-def _train_lgb(p: ParamsTraining, evals_result: dict = None):
+def _train_lgb(p: ParamsTraining, evals_result: dict = None, save_dataset: str | None=None):
     """
     Params::
         loss_func: custom loss or string
@@ -483,14 +487,20 @@ def _train_lgb(p: ParamsTraining, evals_result: dict = None):
     else:
         categorical_features = "auto"
     # set dataset
-    dataset_train = DatasetLGB(
-        x_train, label=y_train, weight=p.sample_weight, group=group_train, 
-        categorical_feature=categorical_features, params={"verbosity": params["verbosity"]}
-    )
-    dataset_valid = [dataset_train] + [
-        DatasetLGB(_x_valid, label=_y_valid, group=_group_valid, params={"verbosity": params["verbosity"]})
-        for _x_valid, _y_valid, _group_valid in zip(x_valid, y_valid, group_valid)
-    ]
+    if isinstance(x_train, str):
+        dataset_train = lgb.Dataset(x_train)
+    else:
+        dataset_train = DatasetLGB(
+            x_train, label=y_train, weight=p.sample_weight, group=group_train, 
+            categorical_feature=categorical_features, params={"verbosity": params["verbosity"]}
+        )
+    if len(x_valid) > 0 and all(isinstance(x, str) for x in x_valid):
+        dataset_valid = [dataset_train] + [DatasetLGB(_x_valid) for _x_valid in x_valid]
+    else:
+        dataset_valid = [dataset_train] + [
+            DatasetLGB(_x_valid, label=_y_valid, reference=dataset_train, group=_group_valid, params={"verbosity": params["verbosity"]})
+            for _x_valid, _y_valid, _group_valid in zip(x_valid, y_valid, group_valid)
+        ]
     # loss setting
     custom_loss_func_eval = None
     params["metric"] = []
@@ -531,6 +541,11 @@ def _train_lgb(p: ParamsTraining, evals_result: dict = None):
         valid_sets=dataset_valid, valid_names=["train"]+[f"valid_{i}" for i in range(len(dataset_valid)-1)],
         feval=custom_loss_func_eval, callbacks=callbacks
     )
+    if save_dataset is not None:
+        LOGGER.info(f"save dataset to {save_dataset}.xxxxx.bin")
+        dataset_train.save_binary(f"{save_dataset}.train.bin")
+        for i, dsv in enumerate(dataset_valid[1:]):
+            dsv.save_binary(f"{save_dataset}.valid_{i}.bin")
     LOGGER.info("END")
     return model
 

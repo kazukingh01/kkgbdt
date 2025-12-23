@@ -37,24 +37,33 @@ def check_other(params: dict, num_iterations: int, evals_result: dict):
     assert isinstance(evals_result, dict)
 
 def check_inputs(
-    x_train: np.ndarray, y_train: np.ndarray,
-    x_valid: np.ndarray | list[np.ndarray] | None=None, y_valid: np.ndarray | list[np.ndarray] | None=None
-) -> tuple[np.ndarray, np.ndarray, list[np.ndarray], list[np.ndarray]]:
-    assert isinstance(x_train, np.ndarray) and len(x_train.shape) == 2
-    assert isinstance(y_train, np.ndarray) and len(y_train.shape) in [1, 2]
-    if x_valid is None: x_valid = []
-    if y_valid is None: y_valid = []
-    if not isinstance(x_valid, list): x_valid = [x_valid, ]
-    if not isinstance(y_valid, list): y_valid = [y_valid, ]
-    assert check_type_list(x_valid, np.ndarray)
-    assert check_type_list(y_valid, np.ndarray)
-    for _x_valid, _y_valid in zip(x_valid, y_valid):
-        assert len(x_train.shape) == len(_x_valid.shape)
-        assert len(y_train.shape) == len(_y_valid.shape)
-        if len(x_train.shape) > 1:
-            assert x_train.shape[-1]  == _x_valid.shape[-1]
-        if len(y_train.shape) > 1:
-            assert y_train.shape[-1]  == _y_valid.shape[-1]
+    x_train: np.ndarray | str, y_train: np.ndarray | None,
+    x_valid: np.ndarray | list[np.ndarray] | str | list[str] | None=None, 
+    y_valid: np.ndarray | list[np.ndarray] | None=None
+) -> tuple[np.ndarray, np.ndarray, list[np.ndarray], list[np.ndarray]] | tuple[str, None, list[str], None]:
+    if isinstance(x_train, str):
+        assert y_train is None
+        assert y_valid is None
+        if x_valid is None: x_valid = []
+        assert isinstance(x_valid, (str, list))
+        if isinstance(x_valid, str):
+            x_valid = [x_valid, ]
+    else:
+        assert isinstance(x_train, np.ndarray) and len(x_train.shape) == 2
+        assert isinstance(y_train, np.ndarray) and len(y_train.shape) in [1, 2]
+        if x_valid is None: x_valid = []
+        if y_valid is None: y_valid = []
+        if not isinstance(x_valid, list): x_valid = [x_valid, ]
+        if not isinstance(y_valid, list): y_valid = [y_valid, ]
+        assert check_type_list(x_valid, np.ndarray)
+        assert check_type_list(y_valid, np.ndarray)
+        for _x_valid, _y_valid in zip(x_valid, y_valid):
+            assert len(x_train.shape) == len(_x_valid.shape)
+            assert len(y_train.shape) == len(_y_valid.shape)
+            if len(x_train.shape) > 1:
+                assert x_train.shape[-1] == _x_valid.shape[-1]
+            if len(y_train.shape) > 1:
+                assert y_train.shape[-1] == _y_valid.shape[-1]
     return x_train, y_train, x_valid, y_valid
 
 def str_loss_to_metric(loss_func: str, mode: str) -> str:
@@ -91,7 +100,7 @@ def check_loss_string_catboost(loss_func: str, is_metric: bool=False) -> str:
             return MST_OBJECTIVE[loss_func]['cat']
 
 def check_loss_func(
-    loss_func: str | Loss, mode: str, loss_func_eval: str | list[str | Loss] | None = None, x_valid: list[np.ndarray] = None
+    loss_func: str | Loss, mode: str, loss_func_eval: str | list[str | Loss] | None = None, x_valid: list[np.ndarray] | list[str] = None
 ) -> tuple[str | Loss, list[str | Loss]]:
     """
     loss_func_eval is allowed "__copy__" string, which means to copy the loss function.
@@ -99,7 +108,7 @@ def check_loss_func(
     assert isinstance(loss_func, (str, Loss))
     check_mode(mode)
     assert x_valid is not None and isinstance(x_valid, list)
-    assert check_type_list(x_valid, np.ndarray)
+    assert check_type_list(x_valid, [np.ndarray, str])
     _loss_func: str | Loss = None
     _loss_func_eval: list[str | Loss] = None
     if isinstance(loss_func, str):
@@ -207,7 +216,7 @@ def check_and_compute_sample_weight(
 
 def check_groups_for_rank(
     group_train: np.ndarray | None=None, group_valid: np.ndarray | list[np.ndarray] | None=None,
-    x_valid: list[np.ndarray] = None
+    x_valid: list[np.ndarray] | list[str] = None
 ) -> tuple[np.ndarray | None, list[np.ndarray | None]]:
     """
     group_train is list for group id 
@@ -218,7 +227,7 @@ def check_groups_for_rank(
         assert len(group_train.shape) == 1
     assert isinstance(x_valid, list)
     if len(x_valid) > 0:
-        assert check_type_list(x_valid, np.ndarray)
+        assert check_type_list(x_valid, [np.ndarray, str])
     if group_valid is not None:
         assert isinstance(group_valid, (np.ndarray, list))
         if not isinstance(group_valid, list): group_valid = [group_valid, ]
@@ -226,7 +235,8 @@ def check_groups_for_rank(
         assert all(len(g.shape) == 1 for g in group_valid)
         if len(x_valid) > 0:
             assert len(x_valid) == len(group_valid)
-            assert all(x.shape[0] == y.shape[0] for x, y in zip(x_valid, group_valid))
+            if isinstance(x_valid[0], np.ndarray):
+                assert all(x.shape[0] == y.shape[0] for x, y in zip(x_valid, group_valid))
     else:
         group_valid = [None, ] * len(x_valid)
     return group_train, group_valid
