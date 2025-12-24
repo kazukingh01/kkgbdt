@@ -1,6 +1,7 @@
 import optuna, json, argparse
 import numpy as np
 from functools import partial
+from kkgbdt.model import KkGBDT
 from kkgbdt.tune import tune_parameter
 from kklogger import set_logger
 from kktestdata import DatasetRegistry
@@ -32,14 +33,23 @@ if __name__ == "__main__":
         )
         n_class = dataset.metadata.n_classes
 
+        # pre-fitting for dataset binary
+        save_dataset="tune"
+        model = KkGBDT(n_class, mode="lgb", save_dataset=save_dataset, **PARAMS_CONST_MODE["lgb"])
+        model.fit(
+            train_x, train_y, loss_func="multi", num_iterations=1, x_valid=valid_x, y_valid=valid_y,
+            loss_func_eval="multi", sample_weight="balanced", early_stopping_rounds=20, early_stopping_idx=0
+        )
+
+        # tuning
         sampler = optuna.samplers.TPESampler()
         try: optuna.delete_study(study_name=f"{filepath.split('.')[0]}_{dataset_name}", storage=f'sqlite:///{filepath}')
         except KeyError: pass
         study   = optuna.create_study(study_name=f"{filepath.split('.')[0]}_{dataset_name}", storage=f'sqlite:///{filepath}', sampler=sampler, directions=["minimize"])
         func    = partial(tune_parameter,
             mode="lgb", num_class=n_class, n_jobs=args.jobs, eval_string='model.booster.best_score["valid_0"]["multi_logloss"]',
-            x_train=train_x, y_train=train_y, loss_func="multi", num_iterations=args.iter,
-            x_valid=valid_x, y_valid=valid_y, loss_func_eval="multi", sample_weight="balanced",
+            x_train=(save_dataset + ".train.bin"),   y_train=None, loss_func="multi", num_iterations=args.iter,
+            x_valid=(save_dataset + ".valid_0.bin"), y_valid=None, loss_func_eval="multi", sample_weight="balanced",
             early_stopping_rounds=20, early_stopping_idx=0,
             params_const = PARAMS_CONST_MODE["lgb"],
             params_search='''{

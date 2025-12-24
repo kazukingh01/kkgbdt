@@ -1,3 +1,4 @@
+import os
 from lightgbm import Dataset
 from xgboost import DMatrix, QuantileDMatrix
 from catboost import Pool
@@ -78,6 +79,7 @@ class DatasetLGB(Dataset):
             else:
                 LOGGER.info(f"set normal dataset. x_train shape: {data.shape}, {data.dtype} | y_train shape: {label.shape if label is not None else None}, {label.dtype if label is not None else None}")
         else:
+            assert os.path.isfile(data), f"file not found: {data}"
             LOGGER.info(f"load binary dataset: {data}")
     def set_custom_label(self, label: np.ndarray):
         self.custom_label = label.copy()

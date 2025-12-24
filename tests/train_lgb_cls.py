@@ -196,10 +196,17 @@ if __name__ == "__main__":
     valeval["CrossEntropyNDCGLoss_log"] = log_loss(test_y, ndf_pred)
     valeval["CrossEntropyNDCGLoss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
+    # print all results
     LOGGER.info(f"{json.dumps({x:float(y) for x, y in valeval.items()}, indent=2)}")
 
     # test for save dataset
-    model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, save_dataset="test")
+    dataset = reg.create("boatrace_original_20210101_20210630")
+    train_x, train_y, valid_x, valid_y, test_x, test_y = dataset.load_data(
+        format="numpy", split_type="valid", test_size=0.3, valid_size=0.2, strategy="v1"
+    )
+    train_y = (train_y.reshape(-1) - 1)
+    valid_y = (valid_y.reshape(-1) - 1)
+    model = KkGBDT(dataset.metadata.n_classes, mode="lgb", num_iterations=10, learning_rate=lr, max_bin=max_bin, max_depth=ndepth, save_dataset="test")
     model.fit(
         train_x, train_y, loss_func="multi", num_iterations=n_iter,
         x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multi", Accuracy(top_k=2)], sample_weight="balanced",
@@ -207,6 +214,6 @@ if __name__ == "__main__":
     )
     model.fit(
         "test.train.bin", None, loss_func="multi", num_iterations=n_iter,
-        x_valid="test.valid0.bin", y_valid=None, loss_func_eval=["multi", Accuracy(top_k=2)], sample_weight="balanced",
+        x_valid="test.valid_0.bin", y_valid=None, loss_func_eval=["multi", Accuracy(top_k=2)], sample_weight="balanced",
         early_stopping_rounds=20, early_stopping_idx=0,
     )

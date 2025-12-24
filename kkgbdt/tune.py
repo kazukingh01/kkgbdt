@@ -16,11 +16,11 @@ LOGGER = set_logger(__name__)
 
 def tune_parameter(
     trial, mode: str="xgb", num_class: int=None, n_jobs: int=1, eval_string: str=None, eval_string_dict: dict[str, object]={},
-    x_train: np.ndarray=None, y_train: np.ndarray=None, loss_func: str | Loss=None, num_iterations: int=None,
-    x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
-    loss_func_eval: str | Loss=None, early_stopping_rounds: int=None, early_stopping_idx: int=None,
+    x_train: np.ndarray | str=None, y_train: np.ndarray | None=None, loss_func: str | Loss=None, num_iterations: int=None,
+    x_valid: np.ndarray | list[np.ndarray] | str | list[str]=None, y_valid: np.ndarray | list[np.ndarray] | None=None,
+    loss_func_eval: str | Loss | list[str | Loss]=None, early_stopping_rounds: int=None, early_stopping_idx: int | str=None,
     train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
-    sample_weight: str | np.ndarray=None, categorical_features: list[int]=None,
+    sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None,
     group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None,
     params_const = {
         "learning_rate"    : 0.03,
@@ -67,10 +67,6 @@ def tune_parameter(
     LOGGER.info("START")
     assert isinstance(eval_string, str)
     assert isinstance(eval_string_dict, dict)
-    assert isinstance(x_train, np.ndarray)
-    assert isinstance(y_train, np.ndarray)
-    assert loss_func is not None
-    assert isinstance(num_iterations, int)
     params_search = eval(params_search, {}, {"trial": trial})
     params = copy.deepcopy(params_const)
     params.update(params_search)

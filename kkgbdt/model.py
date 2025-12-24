@@ -1,4 +1,4 @@
-import copy, time, json, base64, json
+import os, copy, time, json, base64, json
 import numpy as np
 from typing import Any
 from functools import partial
@@ -122,8 +122,8 @@ class KkGBDT:
                 setattr(instance.booster, x, copy.deepcopy(getattr(self.booster, x)))
         return instance
     def fit(
-        self, x_train: np.ndarray, y_train: np.ndarray | None, loss_func: str | Loss=None, num_iterations: int=None,
-        x_valid: np.ndarray | list[np.ndarray]=None, y_valid: np.ndarray | list[np.ndarray]=None,
+        self, x_train: np.ndarray | str, y_train: np.ndarray | None, loss_func: str | Loss=None, num_iterations: int=None,
+        x_valid: np.ndarray | list[np.ndarray] | str | list[str]=None, y_valid: np.ndarray | list[np.ndarray] | None=None,
         loss_func_eval: str | Loss | list[str | Loss]=None, early_stopping_rounds: int=None, early_stopping_idx: int | str=None,
         train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
         sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None,
@@ -488,7 +488,7 @@ def _train_lgb(p: ParamsTraining, evals_result: dict = None, save_dataset: str |
         categorical_features = "auto"
     # set dataset
     if isinstance(x_train, str):
-        dataset_train = lgb.Dataset(x_train)
+        dataset_train = DatasetLGB(x_train)
     else:
         dataset_train = DatasetLGB(
             x_train, label=y_train, weight=p.sample_weight, group=group_train, 
@@ -543,9 +543,15 @@ def _train_lgb(p: ParamsTraining, evals_result: dict = None, save_dataset: str |
     )
     if save_dataset is not None:
         LOGGER.info(f"save dataset to {save_dataset}.xxxxx.bin")
-        dataset_train.save_binary(f"{save_dataset}.train.bin")
-        for i, dsv in enumerate(dataset_valid[1:]):
-            dsv.save_binary(f"{save_dataset}.valid_{i}.bin")
+        for ds, name in zip(
+            ([dataset_train, ] + dataset_valid[1:]),
+            (["train", ] + [f"valid_{i}" for i in range(len(dataset_valid)-1)])
+        ):
+            bin_path = f"{save_dataset}.{name}.bin"
+            if os.path.exists(bin_path):
+                LOGGER.warning(f"File already exists, deleting: {bin_path}")
+                os.remove(bin_path)
+            ds.save_binary(bin_path)
     LOGGER.info("END")
     return model
 
