@@ -50,3 +50,13 @@ sh ./build-python.sh install --precompile
 sh ./build-python.sh bdist_wheel
 pip install dist/lightgbm-*.whl --force-reinstall
 ```
+
+## Optuna dashboard
+
+```bash
+optuna-dashboard sqlite:///params_lgb.db
+```
+
+```bash
+optuna-dashboard "postgresql+psycopg2://postgres:postgres@127.0.0.1:15432/optuna"
+```

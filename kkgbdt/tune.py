@@ -68,6 +68,8 @@ def tune_parameter(
     assert isinstance(eval_string, str)
     assert isinstance(eval_string_dict, dict)
     params_search = eval(params_search, {}, {"trial": trial})
+    assert isinstance(params_const,  dict)
+    assert isinstance(params_search, dict)
     params = copy.deepcopy(params_const)
     params.update(params_search)
     model = KkGBDT(num_class, mode=mode, n_jobs=n_jobs, **params)
@@ -80,6 +82,9 @@ def tune_parameter(
         sample_weight=sample_weight, categorical_features=categorical_features,
         group_train=group_train, group_valid=group_valid,
     )
+    for k, v in params_const.items():
+        if k in params_search: continue
+        trial.set_user_attr(k, v)
     trial.set_user_attr("total_iteration", model.total_iteration)
     trial.set_user_attr("time_train",      model.time_train)
     trial.set_user_attr("time_iter",       (model.time_train / model.total_iteration if model.total_iteration > 0 else float("nan")))
