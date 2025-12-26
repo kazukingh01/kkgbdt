@@ -58,5 +58,6 @@ optuna-dashboard sqlite:///params_lgb.db
 ```
 
 ```bash
+pip install psycopg2-binary==2.9.9
 optuna-dashboard "postgresql+psycopg2://postgres:postgres@127.0.0.1:15432/optuna"
 ```
