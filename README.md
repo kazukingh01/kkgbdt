@@ -51,6 +51,44 @@ sh ./build-python.sh bdist_wheel
 pip install dist/lightgbm-*.whl --force-reinstall
 ```
 
+### Install cmake in Ubuntu 22.04
+
+I got this error.
+
+```bash
+XXXXXXXXXXXXXX:~/10.git/LightGBM/build$ cmake ..
+CMake Error at CMakeLists.txt:26 (cmake_minimum_required):
+  CMake 3.28 or higher is required.  You are running version 3.22.1
+
+
+-- Configuring incomplete, errors occurred!
+```
+
+```bash
+# 1) 依存ツール
+sudo apt-get update
+sudo apt-get install -y ca-certificates gpg wget
+
+# 2) 署名鍵（まだ keyring パッケージが入ってない場合だけ入れる）
+test -f /usr/share/doc/kitware-archive-keyring/copyright || \
+  wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null \
+  | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+
+# 3) リポジトリ追加（自分のUbuntuコードネームに自動追従）
+echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main" \
+  | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
+sudo apt-get update
+
+# 4) keyring パッケージを入れて鍵の自動更新に切替（手動鍵は消してOK）
+test -f /usr/share/doc/kitware-archive-keyring/copyright || \
+  sudo rm /usr/share/keyrings/kitware-archive-keyring.gpg
+sudo apt-get install -y kitware-archive-keyring
+
+# 5) CMake を更新
+sudo apt-get install -y cmake
+cmake --version
+```
+
 ## Optuna dashboard
 
 ```bash
