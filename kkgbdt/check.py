@@ -16,6 +16,7 @@ MST_OBJECTIVE = {
     "reg":    {"xgb": "reg:squarederror",     "lgb": "regression", "cat": "RMSE"},
     "huber":  {"xgb": "reg:pseudohubererror", "lgb": "huber",      "cat": "Huber"},
     "rank":   {"xgb": "rank:ndcg",            "lgb": "lambdarank", "cat": "YetiRank"},
+    "focal":  {"xgb": None,                   "lgb": "focalloss",  "cat": None},
 }
 MST_METRIC = {
     "binary": {"xgb": "logloss",  "lgb": "binary_logloss", "cat": "Logloss"},
@@ -25,6 +26,7 @@ MST_METRIC = {
     "rank":   {"xgb": "ndcg",     "lgb": "ndcg",           "cat": "NDCG"},
     "acc":    {"xgb": None,       "lgb": None,             "cat": "Accuracy"},
     "auc":    {"xgb": "auc",      "lgb": "auc",            "cat": "AUC"},
+    "focal":  {"xgb": None,       "lgb": "focalloss",      "cat": None},
 }
 
 
