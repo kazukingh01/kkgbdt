@@ -127,7 +127,7 @@ class KkGBDT:
         loss_func_eval: str | Loss | list[str | Loss]=None, early_stopping_rounds: int=None, early_stopping_idx: int | str=None,
         train_stopping_val: float=None, train_stopping_rounds: int=None, train_stopping_is_over: bool=True, train_stopping_time: float=None,
         sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None,
-        group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None,
+        group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None, random_seed: int=None,
     ):
         LOGGER.info("START")
         # check
@@ -159,7 +159,7 @@ class KkGBDT:
         time_start = time.time()
         self.booster = self.train_func(
             ParamsTraining(
-                params=copy.deepcopy(self.params),
+                params=(copy.deepcopy(self.params) | (set_random_seed(self.mode, random_seed) if random_seed is not None else {})),
                 num_iterations=num_iterations,
                 x_train=x_train,
                 y_train=y_train,
@@ -629,6 +629,20 @@ def _train_cat(p: ParamsTraining, evals_result: dict = None):
     return model
 
 
+def set_random_seed(mode: str, random_seed: int) -> dict[str, int]:
+    check_mode(mode)
+    assert isinstance(random_seed, int) and random_seed >= 0
+    return {
+        "xgb": {"seed": random_seed},
+        "lgb": {
+            "seed": random_seed,
+            "feature_fraction_seed": random_seed, # for feature_fraction
+            "extra_seed": random_seed, # for extra_trees
+        },
+        "cat": {"random_seed": random_seed},
+    }[mode]
+
+
 def alias_parameters(
     mode: str="xgb",
     num_class: int=None, learning_rate: float=None, n_jobs: int=None, is_gpu: bool=None, 
@@ -646,7 +660,6 @@ def alias_parameters(
     assert isinstance(n_jobs, int) and (n_jobs > 0 or n_jobs == -1)
     assert isinstance(is_gpu, bool)
     assert isinstance(max_bin, int) and max_bin >= 4
-    assert isinstance(random_seed, int) and random_seed >= 0
     assert max_depth         is None or (isinstance(max_depth, int) and max_depth >= -1)
     assert num_leaves        is None or (isinstance(num_leaves, int) and num_leaves >= 0)
     assert min_child_samples is None or (isinstance(min_child_samples, int) and min_child_samples > 0)
@@ -673,7 +686,6 @@ def alias_parameters(
         params["booster"]     = "gbtree" # "dart", "gblinear"
         params["tree_method"] = "hist"
         params["device"]      = "cuda" if is_gpu else "cpu"
-        params["seed"]        = random_seed
         params["max_depth"]   = 0 if max_depth <= 0 else max_depth
         params["min_child_weight"]  = min_child_weight
         params["subsample"]         = subsample
@@ -699,10 +711,7 @@ def alias_parameters(
         if is_gpu is not None and is_gpu:
             params["gpu_platform_id"]     = 0
             params["gpu_device_id"]       = 0
-        params["seed"]                    = random_seed
-        params["feature_fraction_seed"]   = random_seed # for feature_fraction
         params["extra_trees"]             = is_extratree
-        params["extra_seed"]              = random_seed # for extra_trees
         params["max_depth"]               = -1 if max_depth <= 0 else max_depth
         params["min_data_in_leaf"]        = min_child_samples
         params["min_sum_hessian_in_leaf"] = min_child_weight
@@ -730,7 +739,6 @@ def alias_parameters(
         params["max_leaves"]          = num_leaves
         params["thread_count"]        = n_jobs
         params["task_type"]           = "GPU" if is_gpu else "CPU"
-        params["random_seed"]         = random_seed
         params["depth"]               = max_depth
         params["min_data_in_leaf"]    = min_child_samples
         params["subsample"]           = None if subsample == 1 else subsample
@@ -760,6 +768,7 @@ def alias_parameters(
             "min_split_gain", "min_data_in_bin", "path_smooth", "multi_strategy", "is_extratree"
         ]:
             if locals()[x] is not None: LOGGER.warning(f"{x} is not in configlation for {mode}")
+    params  = params | set_random_seed(mode, random_seed)
     _params = {}
     for x, y in params.items():
         if y is not None: _params[x] = y
