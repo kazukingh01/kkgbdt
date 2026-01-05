@@ -1,6 +1,6 @@
 [project]
 name = "kkgbdt"
-version = "1.4.9"
+version = "1.4.10"
 requires-python = ">= 3.12.2"
 description = "my GBDT (Gradient Boosting Decision Tree) liblary. Supported LightGBM, XGBoost, and CatBoost."
 dependencies = [
