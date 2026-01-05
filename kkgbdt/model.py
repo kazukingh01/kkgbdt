@@ -12,6 +12,7 @@ from lightgbm.callback import record_evaluation
 from .check import (
     check_inputs, check_loss_func, check_early_stopping, check_train_stopping, check_other, 
     check_and_compute_sample_weight, check_groups_for_rank, check_mode, str_loss_to_metric,
+    is_prob_from_loss_func
 )
 from .loss import Loss, LGBCustomObjective, LGBCustomEval
 from .dataset import DatasetLGB, DatasetCB, create_xgb_dataset_with_group
@@ -236,7 +237,7 @@ class KkGBDT:
             output = self.inference(output)
         if is_softmax is None:
             is_softmax = self.is_softmax
-        if is_softmax is not None and is_softmax:
+        if is_softmax:
             LOGGER.info("softmax output...")
             if len(output.shape) == 1:
                 output = sigmoid(output)
@@ -319,6 +320,9 @@ class KkGBDT:
             ins.loss = Loss.from_dict(dict_model["loss"])
         else:
             ins.loss = dict_model["loss"]
+        if ins.is_softmax is None:
+            # temporary code for backward compatibility
+            ins.is_softmax = is_prob_from_loss_func(ins.loss, ins.mode)
         LOGGER.info("END")
         return ins
     @classmethod

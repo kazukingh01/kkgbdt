@@ -175,6 +175,16 @@ def check_loss_func(
         is_prob = loss_func.is_prob
     return _loss_func, _loss_func_eval, is_prob
 
+def is_prob_from_loss_func(_loss_func: str | Loss, mode: str) -> bool:
+    check_mode(mode)
+    if isinstance(_loss_func, str):
+        for loss_name, x in MST_OBJECTIVE.items():
+            if x[mode] == _loss_func:
+                return MST_IS_PROBABILITY[loss_name]
+        assert False, f"loss_func: {_loss_func} is not found in MST_OBJECTIVE: {MST_OBJECTIVE}"
+    else:
+        return _loss_func.is_prob
+
 def check_early_stopping(
     early_stopping_rounds: int, early_stopping_idx: int, mode: str, loss_func_eval: list[str | Loss]
 ) -> int | str:

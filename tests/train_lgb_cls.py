@@ -80,6 +80,8 @@ if __name__ == "__main__":
         train_x, train_y, loss_func="multi", num_iterations=n_iter, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.is_softmax == True
+    model.is_softmax = None # test for from_dict() loading is_softmax automatically
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["multiclass_log"] = log_loss(test_y, ndf_pred)
     valeval["multiclass_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
