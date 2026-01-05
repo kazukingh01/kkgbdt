@@ -3,6 +3,7 @@ import lightgbm as lgb
 import xgboost as xgb
 import catboost as cb
 from kktestdata import DatasetRegistry
+from kkgbdt.functions import softmax
 
 
 def eval_binary(y_true, y_pred_proba):
@@ -90,6 +91,7 @@ if __name__ == "__main__":
     pred_cb = ins_cb.predict(cb.Pool(test_x), prediction_type="Probability")
     print("CatBoost binary acc:", eval_binary(test_y, pred_cb[:, 1]))
 
+
     # multi-class
     dataset = reg.create("gas-drift")
     train_x, train_y, valid_x, valid_y, test_x, test_y = dataset.load_data(
@@ -116,7 +118,6 @@ if __name__ == "__main__":
         print("LightGBM focalloss acc:", eval_multiclass(test_y, pred_lgb))
     except lgb.basic.LightGBMError:
         print("If you want to use focal loss, see readme and have to install my custom LightGBM module.")
-
     ## XGBoost
     ds_xgb_train = xgb.DMatrix(train_x, label=train_y)
     ds_xgb_valid = xgb.DMatrix(valid_x, label=valid_y)
@@ -126,6 +127,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, verbose_eval=True
     )
     pred_xgb = ins_xgb.predict(xgb.DMatrix(test_x), output_margin=True)
+    pred_xgb = softmax(pred_xgb) # you have to apply softmax to the output
     print("XGBoost multi-class acc:", eval_multiclass(test_y, pred_xgb))
     ## CatBoost
     ds_cb_train = cb.Pool(train_x, train_y)

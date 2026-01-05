@@ -18,6 +18,14 @@ MST_OBJECTIVE = {
     "rank":   {"xgb": "rank:ndcg",            "lgb": "lambdarank", "cat": "YetiRank"},
     "focal":  {"xgb": None,                   "lgb": "focalloss",  "cat": None},
 }
+MST_IS_PROBABILITY = {
+    "binary": True,
+    "multi":  True,
+    "reg":    False,
+    "huber":  False,
+    "rank":   False,
+    "focal":  True,
+}
 MST_METRIC = {
     "binary": {"xgb": "logloss",  "lgb": "binary_logloss", "cat": "Logloss"},
     "multi":  {"xgb": "mlogloss", "lgb": "multi_logloss",  "cat": "MultiClass"},
@@ -78,13 +86,19 @@ def str_loss_to_metric(loss_func: str, mode: str) -> str:
     assert _type is not None, "loss_func is not found in MST_OBJECTIVE"
     return MST_METRIC[_type][mode]
 
+def substring_loss_func(loss_func: str) -> str:
+    if "(" in loss_func and ")" in loss_func:
+        return loss_func.split("(")[0]
+    else:
+        return loss_func
+
 def check_loss_string_catboost(loss_func: str, is_metric: bool=False) -> str:
     """
     loss_func: huber(delta=1.0,use_weights=false)
     """
     assert isinstance(loss_func, str)
     if "(" in loss_func and ")" in loss_func:
-        _loss   = loss_func.split("(")[0]
+        _loss   = substring_loss_func(loss_func)
         _params = loss_func.split("(")[1].split(")")[0]
         _params = ":".join([x.strip() for x in _params.split(",")])
         if is_metric:
@@ -103,7 +117,7 @@ def check_loss_string_catboost(loss_func: str, is_metric: bool=False) -> str:
 
 def check_loss_func(
     loss_func: str | Loss, mode: str, loss_func_eval: str | list[str | Loss] | None = None, x_valid: list[np.ndarray] | list[str] = None
-) -> tuple[str | Loss, list[str | Loss]]:
+) -> tuple[str | Loss, list[str | Loss], bool]:
     """
     loss_func_eval is allowed "__copy__" string, which means to copy the loss function.
     """
@@ -155,7 +169,11 @@ def check_loss_func(
                     _loss_func_eval = [check_loss_string_catboost(loss_func, is_metric=True), ]
                 else:
                     _loss_func_eval = [MST_METRIC[loss_func][mode], ]
-    return _loss_func, _loss_func_eval
+    if isinstance(loss_func, str):
+        is_prob = MST_IS_PROBABILITY[substring_loss_func(loss_func)]
+    else:
+        is_prob = loss_func.is_prob
+    return _loss_func, _loss_func_eval, is_prob
 
 def check_early_stopping(
     early_stopping_rounds: int, early_stopping_idx: int, mode: str, loss_func_eval: list[str | Loss]

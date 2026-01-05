@@ -50,6 +50,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.is_softmax == False
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["rmse_rmse"] = rmse(test_y, ndf_pred)
@@ -62,6 +63,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0, 
     )
     ndf_pred = model.predict(test_x)
+    assert model.is_softmax == False
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["huber_rmse"] = rmse(test_y, ndf_pred)
@@ -74,6 +76,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0, 
     )
     ndf_pred = model.predict(test_x)
+    assert model.is_softmax == False
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     assert model.loss == KkGBDT.from_dict(model.to_dict()).loss

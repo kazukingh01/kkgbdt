@@ -129,7 +129,7 @@ class KkGBDT:
         sample_weight: str | np.ndarray | list[str | np.ndarray]=None, categorical_features: list[int]=None,
         group_train: None | np.ndarray=None, group_valid: None | np.ndarray | list[np.ndarray]=None, random_seed: int=None,
     ):
-        LOGGER.info("START")
+        LOGGER.info("START", color=["BOLD", "GREEN"])
         # check
         check_other(self.params, num_iterations, self.evals_result)
         # check inputs & convert
@@ -137,13 +137,11 @@ class KkGBDT:
         if isinstance(x_train, str):
             assert self.mode == "lgb"
         # check loss function & convert
-        loss_func, loss_func_eval = check_loss_func(loss_func, self.mode, loss_func_eval, x_valid)
+        loss_func, loss_func_eval, is_prob = check_loss_func(loss_func, self.mode, loss_func_eval, x_valid)
         self.loss = loss_func
-        if isinstance(self.loss, Loss) and self.is_softmax is None and self.loss.is_prob:
-            self.is_softmax = True
-        if isinstance(self.loss, str) and self.is_softmax is None and self.mode == "cat":
-            if self.loss.lower().find("class") >= 0 or self.loss.lower().find("logloss") >= 0:
-                self.is_softmax = True
+        if self.is_softmax is None:
+            LOGGER.info(f"set is_softmax: {is_prob}")
+            self.is_softmax = is_prob
         if isinstance(self.loss, Loss) and hasattr(self.loss, "inference"):
             self.inference = self.loss.inference
         # check sample weight & convert
@@ -215,7 +213,7 @@ class KkGBDT:
             self.loss.extra_processing(output, y_train)
         self.set_parameter_after_training()
         LOGGER.info(f"Time: {self.time_train} s.")
-        LOGGER.info("END")
+        LOGGER.info("END", color=["BOLD", "GREEN"])
     def set_parameter_after_training(self):
         if self.mode == "xgb":
             dictwk = {f"f{i}": 0 for i in range(self.booster.num_features())}
@@ -231,6 +229,7 @@ class KkGBDT:
                 self.feature_importances = []
     def predict(self, input: np.ndarray, *args, is_softmax: bool=None, iteration_at: int=None, **kwargs):
         LOGGER.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
+        # Output must be raw score. This rule must be followed.
         output = self.predict_func(input, *args, iteration_at=iteration_at, **kwargs)
         if hasattr(self, "inference") and self.inference is not None:
             LOGGER.info("extra inference for output...")
@@ -258,18 +257,20 @@ class KkGBDT:
         if iteration_at is None:
             iteration_at = self.best_iteration
             if iteration_at == 0: iteration_at = -1
-        output = self.booster.predict(input, *args, num_iteration=iteration_at, **kwargs)
+        # Output with raw score is required. This rule must be followed.
+        output = self.booster.predict(input, *args, num_iteration=iteration_at, raw_score=True, **kwargs)
         LOGGER.info("END")
         return output
     def predict_cat(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
         LOGGER.info("START")
         assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
+        assert "prediction_type" not in kwargs, f"{kwargs}"
         if iteration_at is None:
             iteration_at = self.best_iteration
             if iteration_at is None or iteration_at < 0:
                 iteration_at = self.booster.tree_count_ - 1
-        kwargs["prediction_type"] = kwargs.get("prediction_type", "RawFormulaVal")
-        kwargs["ntree_end"] = kwargs.get("ntree_end", iteration_at + 1)
+        kwargs["prediction_type"] = "RawFormulaVal"
+        kwargs["ntree_end"]       = kwargs.get("ntree_end", iteration_at + 1)
         output = self.booster.predict(input, *args, **kwargs)
         output = np.array(output)
         if output.ndim == 2 and output.shape[1] == 1:

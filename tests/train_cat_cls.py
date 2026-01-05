@@ -49,6 +49,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.is_softmax == True
     assert model.best_iteration < (n_iter - 1)
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
@@ -61,6 +62,7 @@ if __name__ == "__main__":
         train_x, train_y, loss_func="multi", num_iterations=n_iter, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.is_softmax == True
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["multiclass_log"] = log_loss(test_y, ndf_pred)
     valeval["multiclass_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
@@ -73,6 +75,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0,
     )
     ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+    assert model.is_softmax == True
     assert model.best_iteration < (n_iter - 1)
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     valeval["multiclass_log"] = log_loss(test_y, ndf_pred)
@@ -88,6 +91,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x)
+    assert model.is_softmax == True
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["CategoryCE_log"] = log_loss(test_y, ndf_pred)
@@ -101,6 +105,7 @@ if __name__ == "__main__":
         early_stopping_rounds=20, early_stopping_idx=0, sample_weight="balanced",
     )
     ndf_pred = model.predict(test_x)
+    assert model.is_softmax == True
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     assert model.loss == KkGBDT.from_dict(model.to_dict()).loss
     valeval["FocalLoss_log"] = log_loss(test_y, ndf_pred)

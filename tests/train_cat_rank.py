@@ -28,6 +28,7 @@ if __name__ == '__main__':
         ).tolist(),
     )
     ndf_pred = model.predict(test_x[:, 1:])
+    assert model.is_softmax == False
     assert model.best_iteration < n_iter
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x[:, 1:]))
     benchmark = evaluate_ndcg(ndf_pred,     test_y, is_point_to_rank=True,  k=6, idx_groups=test_x[:, 0])

@@ -70,11 +70,11 @@ if __name__ == "__main__":
     valeval["BinaryCrossEntropyLoss_acc"] = Accuracy(top_k=1)(ndf_pred, (test_y == 1).astype(int))
 
     LOGGER.info("public loss multiclass ( no validation )", color=["BOLD", "UNDERLINE", "GREEN"])
-    model   = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, is_softmax=True)
+    model   = KkGBDT(n_class, mode="xgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
     model.fit(
         train_x, train_y, loss_func="multi", num_iterations=n_iter,
     )
-    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration, is_softmax=True)
+    ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
     assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
 
     LOGGER.info("public loss multiclass", color=["BOLD", "UNDERLINE", "GREEN"])
