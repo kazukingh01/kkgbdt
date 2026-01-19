@@ -117,3 +117,28 @@ def log_loss(y: np.ndarray, x: np.ndarray):
     assert y.dtype in [int, np.int8, np.int16, np.int32, np.int64]
     ndf = x[np.arange(x.shape[0]), y]
     return (-1 * np.log(ndf)).mean()
+
+def mixed_radix_encode(digits: list[int], radices: list[int]) -> int:
+    assert isinstance(digits,  list) and len(digits)  > 0, f"digits:  {type(digits)} {digits} is not a list"
+    assert isinstance(radices, list) and len(radices) > 0, f"radices: {type(radices)} {radices} is not a list"
+    assert len(digits) == len(radices)
+    assert all(isinstance(x, (int, np.int8, np.int16, np.int32, np.int64)) for x in digits)
+    assert all(isinstance(x, (int, np.int8, np.int16, np.int32, np.int64)) for x in radices)
+    result     = 0
+    multiplier = 1
+    for digit, radix in zip(digits, radices):
+        assert digit < radix, f"digit: {digit} is greater than radix: {radix}"
+        assert digit >= 0,    f"digit: {digit} is less than 0"
+        result += digit * multiplier
+        multiplier *= radix
+    return result
+
+def mixed_radix_decode(value: int, radices: list[int]) -> list[int]:
+    assert isinstance(value, int)
+    assert isinstance(radices, list) and len(radices) > 0, f"radices: {type(radices)} {radices} is not a list"
+    assert all(isinstance(x, (int, np.int8, np.int16, np.int32, np.int64)) for x in radices)
+    digits = []
+    for radix in radices:
+        digits.append(value % radix)
+        value //= radix
+    return digits

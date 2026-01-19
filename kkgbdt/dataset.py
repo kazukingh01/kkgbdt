@@ -5,7 +5,7 @@ from catboost import Pool
 import numpy as np
 # local package
 from kklogger import set_logger
-from .functions import sort_group_id
+from .functions import sort_group_id, mixed_radix_encode, mixed_radix_decode
 
 __all__ = [
     "DatasetLGB",
@@ -63,7 +63,7 @@ class DatasetLGB(Dataset):
     """
     def __init__(
         self, data: np.ndarray | str, *args, label: np.ndarray=None, weight: np.ndarray=None,
-        group: None | np.ndarray=None, **kwargs
+        group: None | np.ndarray=None, encode_type: int | None=None, **kwargs
     ):
         assert isinstance(data, (np.ndarray, str))
         if isinstance(data, np.ndarray): assert len(data.shape) == 2
@@ -71,13 +71,26 @@ class DatasetLGB(Dataset):
         assert weight is None or isinstance(weight, np.ndarray)
         if group is not None:
             data, group, label, weight = check_and_sort_group_id(data, group, label=label, weight=weight, check_mode="lgb")
+        assert encode_type is None or (isinstance(encode_type, int) and encode_type >= 0)
         super().__init__(data, *args, label=label, weight=weight, group=group, **kwargs)
-        if isinstance(data, np.ndarray): 
+        self.encode_type = encode_type
+        if isinstance(data, np.ndarray):
+            LOGGER.info(f"x_train shape: {data.shape}, {data.dtype} | y_train shape: {label.shape if label is not None else None}, {label.dtype if label is not None else None}")            
             if label is not None and len(label.shape) == 2:
-                LOGGER.info(f"set custom dataset. x_train shape: {data.shape}, {data.dtype} | y_train shape: {label.shape}, {label.dtype}")
-                self.set_custom_label(label)
+                if encode_type is not None:
+                    LOGGER.warning(f"encode_type: {encode_type}, encode multi-label to single-label")
+                    if encode_type == 1:
+                        self.label = np.vectorize(
+                            lambda x: mixed_radix_encode(x.tolist(), [x.shape[0]] * x.shape[0]),
+                            signature=f"({label.shape[1]})->()"
+                        )(label)
+                    else:
+                        assert False, f"encode_type: {encode_type} is not supported"
+                else:
+                    LOGGER.warning(f"set custom dataset")
+                    self.set_custom_label(label)
             else:
-                LOGGER.info(f"set normal dataset. x_train shape: {data.shape}, {data.dtype} | y_train shape: {label.shape if label is not None else None}, {label.dtype if label is not None else None}")
+                LOGGER.info(f"set normal dataset")
         else:
             assert os.path.isfile(data), f"file not found: {data}"
             LOGGER.info(f"load binary dataset: {data}")

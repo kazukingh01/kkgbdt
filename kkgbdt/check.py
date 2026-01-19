@@ -11,31 +11,44 @@ LOGGER = set_logger(__name__)
 
 MODE = ["xgb", "lgb", "cat"]
 MST_OBJECTIVE = {
-    "binary": {"xgb": "binary:logistic",      "lgb": "binary",     "cat": "Logloss"},
-    "multi":  {"xgb": "multi:softmax",        "lgb": "multiclass", "cat": "MultiClass"},
-    "reg":    {"xgb": "reg:squarederror",     "lgb": "regression", "cat": "RMSE"},
-    "huber":  {"xgb": "reg:pseudohubererror", "lgb": "huber",      "cat": "Huber"},
-    "rank":   {"xgb": "rank:ndcg",            "lgb": "lambdarank", "cat": "YetiRank"},
-    "focal":  {"xgb": None,                   "lgb": "focalloss",  "cat": None},
+    "binary":    {"xgb": "binary:logistic",      "lgb": "binary",     "cat": "Logloss"},
+    "multi":     {"xgb": "multi:softmax",        "lgb": "multiclass", "cat": "MultiClass"},
+    "reg":       {"xgb": "reg:squarederror",     "lgb": "regression", "cat": "RMSE"},
+    "huber":     {"xgb": "reg:pseudohubererror", "lgb": "huber",      "cat": "Huber"},
+    "rank":      {"xgb": "rank:ndcg",            "lgb": "lambdarank", "cat": "YetiRank"},
+    "focal":     {"xgb": None,                   "lgb": "focalloss",  "cat": None},
+    "multirank": {"xgb": None,                   "lgb": "multirank",  "cat": None},
 }
 MST_IS_PROBABILITY = {
-    "binary": True,
-    "multi":  True,
-    "reg":    False,
-    "huber":  False,
-    "rank":   False,
-    "focal":  True,
+    "binary":    True,
+    "multi":     True,
+    "reg":       False,
+    "huber":     False,
+    "rank":      False,
+    "focal":     True,
+    "multirank": False,
 }
 MST_METRIC = {
-    "binary": {"xgb": "logloss",  "lgb": "binary_logloss", "cat": "Logloss"},
-    "multi":  {"xgb": "mlogloss", "lgb": "multi_logloss",  "cat": "MultiClass"},
-    "reg":    {"xgb": "rmse",     "lgb": "rmse",           "cat": "RMSE"},
-    "huber":  {"xgb": "mphe",     "lgb": "huber",          "cat": "Huber"},
-    "rank":   {"xgb": "ndcg",     "lgb": "ndcg",           "cat": "NDCG"},
-    "acc":    {"xgb": None,       "lgb": None,             "cat": "Accuracy"},
-    "auc":    {"xgb": "auc",      "lgb": "auc",            "cat": "AUC"},
-    "focal":  {"xgb": None,       "lgb": "focalloss",      "cat": None},
+    "binary":    {"xgb": "logloss",  "lgb": "binary_logloss", "cat": "Logloss"},
+    "multi":     {"xgb": "mlogloss", "lgb": "multi_logloss",  "cat": "MultiClass"},
+    "reg":       {"xgb": "rmse",     "lgb": "rmse",           "cat": "RMSE"},
+    "huber":     {"xgb": "mphe",     "lgb": "huber",          "cat": "Huber"},
+    "rank":      {"xgb": "ndcg",     "lgb": "ndcg",           "cat": "NDCG"},
+    "acc":       {"xgb": None,       "lgb": None,             "cat": "Accuracy"},
+    "auc":       {"xgb": "auc",      "lgb": "auc",            "cat": "AUC"},
+    "focal":     {"xgb": None,       "lgb": "focalloss",      "cat": None},
+    "multirank": {"xgb": None,       "lgb": "multirank",      "cat": None},
 }
+MST_ENCODE_TYPE = {
+    "binary":    None,
+    "multi":     None,
+    "reg":       None,
+    "huber":     None,
+    "rank":      None,
+    "focal":     None,
+    "multirank": 1,
+}
+
 
 
 def check_mode(mode: str):
@@ -117,7 +130,7 @@ def check_loss_string_catboost(loss_func: str, is_metric: bool=False) -> str:
 
 def check_loss_func(
     loss_func: str | Loss, mode: str, loss_func_eval: str | list[str | Loss] | None = None, x_valid: list[np.ndarray] | list[str] = None
-) -> tuple[str | Loss, list[str | Loss], bool]:
+) -> tuple[str | Loss, list[str | Loss], bool, int | None]:
     """
     loss_func_eval is allowed "__copy__" string, which means to copy the loss function.
     """
@@ -170,10 +183,12 @@ def check_loss_func(
                 else:
                     _loss_func_eval = [MST_METRIC[loss_func][mode], ]
     if isinstance(loss_func, str):
-        is_prob = MST_IS_PROBABILITY[substring_loss_func(loss_func)]
+        is_prob     = MST_IS_PROBABILITY[substring_loss_func(loss_func)]
+        encode_type = MST_ENCODE_TYPE[substring_loss_func(loss_func)]
     else:
-        is_prob = loss_func.is_prob
-    return _loss_func, _loss_func_eval, is_prob
+        is_prob     = loss_func.is_prob
+        encode_type = None
+    return _loss_func, _loss_func_eval, is_prob, encode_type
 
 def is_prob_from_loss_func(_loss_func: str | Loss, mode: str) -> bool:
     check_mode(mode)

@@ -62,7 +62,7 @@ class ParamsTraining:
     categorical_features: list[int]=None
     group_train: None | np.ndarray=None
     group_valid: None | np.ndarray | list[np.ndarray]=None
-
+    encode_type: int | None=None
 
 class KkGBDT:
     def __init__(
@@ -138,7 +138,7 @@ class KkGBDT:
         if isinstance(x_train, str):
             assert self.mode == "lgb"
         # check loss function & convert
-        loss_func, loss_func_eval, is_prob = check_loss_func(loss_func, self.mode, loss_func_eval, x_valid)
+        loss_func, loss_func_eval, is_prob, encode_type = check_loss_func(loss_func, self.mode, loss_func_eval, x_valid)
         self.loss = loss_func
         if self.is_softmax is None:
             LOGGER.info(f"set is_softmax: {is_prob}")
@@ -176,6 +176,7 @@ class KkGBDT:
                 categorical_features=categorical_features,
                 group_train=group_train,
                 group_valid=group_valid,
+                encode_type=encode_type,
             ),
             evals_result=self.evals_result,
         )
@@ -496,15 +497,17 @@ def _train_lgb(p: ParamsTraining, evals_result: dict = None, save_dataset: str |
         dataset_train = DatasetLGB(x_train)
     else:
         dataset_train = DatasetLGB(
-            x_train, label=y_train, weight=p.sample_weight, group=group_train, 
+            x_train, label=y_train, weight=p.sample_weight, group=group_train, encode_type=p.encode_type,
             categorical_feature=categorical_features, params={"verbosity": params["verbosity"]}
         )
     if len(x_valid) > 0 and all(isinstance(x, str) for x in x_valid):
         dataset_valid = [dataset_train] + [DatasetLGB(_x_valid) for _x_valid in x_valid]
     else:
         dataset_valid = [dataset_train] + [
-            DatasetLGB(_x_valid, label=_y_valid, reference=dataset_train, group=_group_valid, params={"verbosity": params["verbosity"]})
-            for _x_valid, _y_valid, _group_valid in zip(x_valid, y_valid, group_valid)
+            DatasetLGB(
+                _x_valid, label=_y_valid, reference=dataset_train, group=_group_valid, 
+                encode_type=p.encode_type, params={"verbosity": params["verbosity"]}
+            ) for _x_valid, _y_valid, _group_valid in zip(x_valid, y_valid, group_valid)
         ]
     # loss setting
     custom_loss_func_eval = None
