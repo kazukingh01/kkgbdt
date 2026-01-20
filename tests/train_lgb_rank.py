@@ -1,9 +1,9 @@
-import pandas as pd 
+import lightgbm as lgb
 from kklogger import set_logger
 import numpy as np
 from kktestdata import DatasetRegistry
 from kkgbdt.model import KkGBDT
-from kkgbdt.functions import evaluate_ndcg
+from kkgbdt.functions import evaluate_ndcg, labels_encoder_by_mixed_radix
 
 
 LOGGER = set_logger(__name__)
@@ -34,3 +34,30 @@ if __name__ == '__main__':
     benchmark = evaluate_ndcg(ndf_pred,     test_y, is_point_to_rank=True,  k=6, idx_groups=test_x[:, 0])
     pred      = evaluate_ndcg(test_x[:, 1], test_y, is_point_to_rank=False, k=6, idx_groups=test_x[:, 0])
     LOGGER.info(f"pred: {pred.mean()}, base: {benchmark.mean()}", color=["GREEN", "BOLD"])
+
+    try:
+        LOGGER.info("public custom loss multirank", color=["BOLD", "UNDERLINE", "GREEN"])
+        dataset = reg.create("boatrace_original_20210101_20210630")
+        df_train, df_valid, df_test = dataset.load_data(
+            format="pandas", split_type="valid", test_size=0.3, valid_size=0.2, strategy="v4"
+        )
+        df_train["target"] = labels_encoder_by_mixed_radix(df_train[dataset.metadata.columns_target].to_numpy() - 1)
+        df_valid["target"] = labels_encoder_by_mixed_radix(df_valid[dataset.metadata.columns_target].to_numpy() - 1)
+        df_test[ "target"] = labels_encoder_by_mixed_radix(df_test[ dataset.metadata.columns_target].to_numpy() - 1)
+        train_x, train_y = df_train[dataset.metadata.columns_feature].to_numpy(), df_train["target"].to_numpy()
+        valid_x, valid_y = df_valid[dataset.metadata.columns_feature].to_numpy(), df_valid["target"].to_numpy()
+        test_x,  test_y  = df_test[ dataset.metadata.columns_feature].to_numpy(), df_test["target"].to_numpy()
+        model = KkGBDT(6, mode="lgb", learning_rate=0.1, max_bin=64, max_depth=-1, verbosity=1)
+        assert model.is_softmax is None
+        model.fit(
+            train_x, train_y, loss_func="multirank", num_iterations=10,
+            x_valid=valid_x, y_valid=valid_y, loss_func_eval="multirank", sample_weight=None,
+            early_stopping_rounds=20, early_stopping_idx=0,
+        )
+        ndf_pred = model.predict(test_x, iteration_at=model.best_iteration, is_softmax=True)
+        assert model.is_softmax == False
+        assert model.best_iteration < n_iter
+        assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x, is_softmax=True))
+    except lgb.basic.LightGBMError:
+        LOGGER.warning("Official LightGBM does not support this loss function. If you want to use it, see readme and have to install my custom LightGBM module.")
+

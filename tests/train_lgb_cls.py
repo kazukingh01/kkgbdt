@@ -101,6 +101,24 @@ if __name__ == "__main__":
     valeval["multiclass_log"] = log_loss(test_y, ndf_pred)
     valeval["multiclass_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
+    try:
+        LOGGER.info("public custom loss focalloss", color=["BOLD", "UNDERLINE", "GREEN"])
+        model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+        assert model.is_softmax is None
+        model.fit(
+            train_x, train_y, loss_func="focal", num_iterations=n_iter,
+            x_valid=valid_x, y_valid=valid_y, loss_func_eval=["focal", Accuracy(top_k=2)], sample_weight="balanced",
+            early_stopping_rounds=20, early_stopping_idx=0,
+        )
+        ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+        assert model.is_softmax == True
+        assert model.best_iteration < n_iter
+        assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+        valeval["focalloss_log"] = log_loss(test_y, ndf_pred)
+        valeval["focalloss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
+    except lgb.basic.LightGBMError:
+        LOGGER.warning("Official LightGBM does not support this loss function. If you want to use it, see readme and have to install my custom LightGBM module.")
+
     LOGGER.info('public loss with "use_quantized_grad"', color=["BOLD", "UNDERLINE", "GREEN"])
     try:
         model = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, use_quantized_grad=True, num_grad_quant_bins=4, )

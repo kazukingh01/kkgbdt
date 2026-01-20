@@ -142,3 +142,11 @@ def mixed_radix_decode(value: int, radices: list[int]) -> list[int]:
         digits.append(value % radix)
         value //= radix
     return digits
+
+def labels_encoder_by_mixed_radix(labels: np.ndarray) -> np.ndarray:
+    assert isinstance(labels, np.ndarray) and len(labels.shape) == 2
+    assert labels.dtype in [int, np.int8, np.int16, np.int32, np.int64]
+    return np.vectorize(
+        lambda x: mixed_radix_encode(x.tolist(), [x.shape[0]] * x.shape[0]),
+        signature=f"({labels.shape[1]})->()"
+    )(labels)

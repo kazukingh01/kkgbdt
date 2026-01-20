@@ -46,9 +46,25 @@ cmake ..
 make -j$(nproc)
 cd ../
 sh ./build-python.sh install --precompile
+```
 
+別の方法
+
+```bash
 sh ./build-python.sh bdist_wheel
 pip install dist/lightgbm-*.whl --force-reinstall
+```
+
+### Merge mycustom to official version
+
+```bash
+git remote add upstream https://github.com/microsoft/LightGBM.git
+git fetch upstream --tags
+git switch --detach v4.5.0
+git submodule update --init --recursive
+git switch -c myv4.5.0
+git cherry-pick $(git merge-base origin/master mycustom)..mycustom
+git push origin myv4.5.0
 ```
 
 ### Install cmake in Ubuntu 22.04
