@@ -102,8 +102,23 @@ if __name__ == "__main__":
     valeval["multiclass_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
 
     try:
+        LOGGER.info("public custom loss multiclass smoothing", color=["BOLD", "UNDERLINE", "GREEN"])
+        model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, multiclass_smooth=0.05)
+        assert model.is_softmax is None
+        model.fit(
+            train_x, train_y, loss_func="multismooth", num_iterations=n_iter,
+            x_valid=valid_x, y_valid=valid_y, loss_func_eval=["multismooth", Accuracy(top_k=2)], sample_weight="balanced",
+            early_stopping_rounds=20, early_stopping_idx=0,
+        )
+        ndf_pred = model.predict(test_x, iteration_at=model.best_iteration)
+        assert model.is_softmax == True
+        assert model.best_iteration < n_iter
+        assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
+        valeval["multismooth_log"] = log_loss(test_y, ndf_pred)
+        valeval["multismooth_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
+
         LOGGER.info("public custom loss focalloss", color=["BOLD", "UNDERLINE", "GREEN"])
-        model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth)
+        model   = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, focal_gamma=0.5)
         assert model.is_softmax is None
         model.fit(
             train_x, train_y, loss_func="focal", num_iterations=n_iter,

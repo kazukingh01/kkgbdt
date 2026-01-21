@@ -41,7 +41,7 @@ cd LightGBM
 git submodule update --init --recursive
 mkdir -p build
 cd build
-sudo apt update && sudo apt install cmake
+# sudo apt update && sudo apt install cmake
 cmake ..
 make -j$(nproc)
 cd ../
@@ -58,13 +58,18 @@ pip install dist/lightgbm-*.whl --force-reinstall
 ### Merge mycustom to official version
 
 ```bash
+VERSION=v4.5.0
+git switch master
+git submodule update --init --recursive
 git remote add upstream https://github.com/microsoft/LightGBM.git
 git fetch upstream --tags
-git switch --detach v4.5.0
+git branch -d my${VERSION}
+git switch --detach ${VERSION}
 git submodule update --init --recursive
-git switch -c myv4.5.0
+git switch -c my${VERSION}
 git cherry-pick $(git merge-base origin/master mycustom)..mycustom
-git push origin myv4.5.0
+git push origin --delete my${VERSION}
+git push origin my${VERSION}
 ```
 
 ### Install cmake in Ubuntu 22.04

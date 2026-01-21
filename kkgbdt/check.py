@@ -11,42 +11,48 @@ LOGGER = set_logger(__name__)
 
 MODE = ["xgb", "lgb", "cat"]
 MST_OBJECTIVE = {
-    "binary":    {"xgb": "binary:logistic",      "lgb": "binary",     "cat": "Logloss"},
-    "multi":     {"xgb": "multi:softmax",        "lgb": "multiclass", "cat": "MultiClass"},
-    "reg":       {"xgb": "reg:squarederror",     "lgb": "regression", "cat": "RMSE"},
-    "huber":     {"xgb": "reg:pseudohubererror", "lgb": "huber",      "cat": "Huber"},
-    "rank":      {"xgb": "rank:ndcg",            "lgb": "lambdarank", "cat": "YetiRank"},
-    "focal":     {"xgb": None,                   "lgb": "focalloss",  "cat": None},
-    "multirank": {"xgb": None,                   "lgb": "multirank",  "cat": None},
+    "binary":      {"xgb": "binary:logistic",      "lgb": "binary",            "cat": "Logloss"},
+    "multi":       {"xgb": "multi:softmax",        "lgb": "multiclass",        "cat": "MultiClass"},
+    "reg":         {"xgb": "reg:squarederror",     "lgb": "regression",        "cat": "RMSE"},
+    "huber":       {"xgb": "reg:pseudohubererror", "lgb": "huber",             "cat": "Huber"},
+    "rank":        {"xgb": "rank:ndcg",            "lgb": "lambdarank",        "cat": "YetiRank"},
+    "focal":       {"xgb": None,                   "lgb": "focalloss",         "cat": None},
+    "multirank":   {"xgb": None,                   "lgb": "multirank",         "cat": None},
+    "multismooth": {"xgb": None,                   "lgb": "multiclasssmooth",  "cat": None},
 }
 MST_IS_PROBABILITY = {
-    "binary":    True,
-    "multi":     True,
-    "reg":       False,
-    "huber":     False,
-    "rank":      False,
-    "focal":     True,
-    "multirank": False,
+    "binary":      True,
+    "multi":       True,
+    "reg":         False,
+    "huber":       False,
+    "rank":        False,
+    "focal":       True,
+    "multirank":   False,
+    "multismooth": True,
 }
 MST_METRIC = {
-    "binary":    {"xgb": "logloss",  "lgb": "binary_logloss", "cat": "Logloss"},
-    "multi":     {"xgb": "mlogloss", "lgb": "multi_logloss",  "cat": "MultiClass"},
-    "reg":       {"xgb": "rmse",     "lgb": "rmse",           "cat": "RMSE"},
-    "huber":     {"xgb": "mphe",     "lgb": "huber",          "cat": "Huber"},
-    "rank":      {"xgb": "ndcg",     "lgb": "ndcg",           "cat": "NDCG"},
-    "acc":       {"xgb": None,       "lgb": None,             "cat": "Accuracy"},
-    "auc":       {"xgb": "auc",      "lgb": "auc",            "cat": "AUC"},
-    "focal":     {"xgb": None,       "lgb": "focalloss",      "cat": None},
-    "multirank": {"xgb": None,       "lgb": "multirank",      "cat": None},
+    "binary":      {"xgb": "logloss",  "lgb": "binary_logloss", "cat": "Logloss"},
+    "multi":       {"xgb": "mlogloss", "lgb": "multi_logloss",  "cat": "MultiClass"},
+    "reg":         {"xgb": "rmse",     "lgb": "rmse",           "cat": "RMSE"},
+    "huber":       {"xgb": "mphe",     "lgb": "huber",          "cat": "Huber"},
+    "rank":        {"xgb": "ndcg",     "lgb": "ndcg",           "cat": "NDCG"},
+    "acc":         {"xgb": None,       "lgb": None,             "cat": "Accuracy"},
+    "auc":         {"xgb": "auc",      "lgb": "auc",            "cat": "AUC"},
+    "focal":       {"xgb": None,       "lgb": "focalloss",      "cat": None},
+    "multirank":   {"xgb": None,       "lgb": "multirank",      "cat": None},
+    "multismooth": {"xgb": None,       "lgb": "multi_logloss",  "cat": None},
 }
+# None: don't use encode type
+# 1: use mixed_radix_encode
 MST_ENCODE_TYPE = {
-    "binary":    None,
-    "multi":     None,
-    "reg":       None,
-    "huber":     None,
-    "rank":      None,
-    "focal":     None,
-    "multirank": 1,
+    "binary":      None,
+    "multi":       None,
+    "reg":         None,
+    "huber":       None,
+    "rank":        None,
+    "focal":       None,
+    "multirank":   1,
+    "multismooth": None,
 }
 
 
