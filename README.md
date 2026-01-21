@@ -63,7 +63,7 @@ git switch master
 git submodule update --init --recursive
 git remote add upstream https://github.com/microsoft/LightGBM.git
 git fetch upstream --tags
-git branch -d my${VERSION}
+git branch -D my${VERSION}
 git switch --detach ${VERSION}
 git submodule update --init --recursive
 git switch -c my${VERSION}
