@@ -13,7 +13,7 @@ __all__ = [
     "TrainStopping",
     "callback_stop_training",
     "callback_best_iter",
-    "log_evaluation"
+    "log_evaluation",
 ]
 
 

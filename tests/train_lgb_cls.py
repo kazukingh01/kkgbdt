@@ -6,7 +6,7 @@ from kktestdata import DatasetRegistry
 from kkgbdt.model import KkGBDT
 from kkgbdt.loss import CategoricalCrossEntropyLoss, CrossEntropyLoss, Accuracy, CategoricalFocalLoss, \
     CrossEntropyLossArgmax, BinaryCrossEntropyLoss, CrossEntropyNDCGLoss, LogitMarginL1Loss, BinaryCrossEntropyLoss
-from kkgbdt.functions import log_loss
+from kkgbdt.functions import log_loss, softmax
 from kklogger import set_logger
 
 
@@ -131,6 +131,15 @@ if __name__ == "__main__":
         assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
         valeval["focalloss_log"] = log_loss(test_y, ndf_pred)
         valeval["focalloss_acc"] = Accuracy(top_k=2)(ndf_pred, test_y)
+
+        LOGGER.info("public custom loss soft_multiclass", color=["BOLD", "UNDERLINE", "GREEN"])
+        model    = KkGBDT(n_class, mode="lgb", learning_rate=lr, max_bin=max_bin, max_depth=ndepth, focal_gamma=0.5)
+        assert model.is_softmax is None
+        _train_y = softmax(np.random.rand(train_x.shape[0], n_class))
+        model.fit(train_x, _train_y, loss_func="multisoft", num_iterations=10, sample_weight=None)
+        ndf_pred = model.predict(test_x, iteration_at=model.best_iteration, is_softmax=False)
+        assert model.is_softmax == True
+        assert np.all(ndf_pred == KkGBDT.from_dict(model.to_dict()).predict(test_x))
     except lgb.basic.LightGBMError:
         LOGGER.warning("Official LightGBM does not support this loss function. If you want to use it, see readme and have to install my custom LightGBM module.")
 

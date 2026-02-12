@@ -72,7 +72,15 @@ class DatasetLGB(Dataset):
         if group is not None:
             data, group, label, weight = check_and_sort_group_id(data, group, label=label, weight=weight, check_mode="lgb")
         assert encode_type is None or (isinstance(encode_type, int) and encode_type >= 0)
-        super().__init__(data, *args, label=label, weight=weight, group=group, **kwargs)
+        init_score = kwargs.get("init_score")
+        if "init_score" in kwargs: kwargs.pop("init_score")
+        if encode_type == 2:
+            # encode to "init_score"
+            assert init_score is None, "label encode to 'init_score'"
+            assert label is not None and len(label.shape) == 2
+            init_score = label.copy()
+            label      = np.random.randint(0, label.shape[1], label.shape[0], dtype=int)
+        super().__init__(data, *args, label=label, weight=weight, group=group, init_score=init_score, **kwargs)
         self.encode_type = encode_type
         if isinstance(data, np.ndarray):
             LOGGER.info(f"x_train shape: {data.shape}, {data.dtype} | y_train shape: {label.shape if label is not None else None}, {label.dtype if label is not None else None}")            
@@ -84,6 +92,8 @@ class DatasetLGB(Dataset):
                             lambda x: mixed_radix_encode(x.tolist(), [x.shape[0]] * x.shape[0]),
                             signature=f"({label.shape[1]})->()"
                         )(label)
+                    elif encode_type == 2:
+                        pass
                     else:
                         assert False, f"encode_type: {encode_type} is not supported"
                 else:

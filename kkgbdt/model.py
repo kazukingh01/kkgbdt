@@ -229,7 +229,7 @@ class KkGBDT:
             except cat.CatBoostError as e:
                 LOGGER.warning(f"Error at get_feature_importance(): {e}")
                 self.feature_importances = []
-    def predict(self, input: np.ndarray, *args, is_softmax: bool=None, iteration_at: int=None, **kwargs):
+    def predict(self, input: np.ndarray, *args, is_softmax: bool | None=None, iteration_at: int | None=None, **kwargs):
         LOGGER.info(f"args: {args}, is_softmax: {is_softmax}, kwargs: {kwargs}")
         # Output must be raw score. This rule must be followed.
         output = self.predict_func(input, *args, iteration_at=iteration_at, **kwargs)
@@ -246,14 +246,14 @@ class KkGBDT:
                 output = softmax(output)
         LOGGER.info("END")
         return output
-    def predict_xgb(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
+    def predict_xgb(self, input: np.ndarray, *args, iteration_at: int | None=None, **kwargs) -> np.ndarray:
         LOGGER.info("START")
         assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
         if iteration_at is None: iteration_at = self.best_iteration
         output = self.booster.predict(xgb.DMatrix(input), *args, output_margin=True, iteration_range=(0, iteration_at), **kwargs)
         LOGGER.info("END")
         return output
-    def predict_lgb(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
+    def predict_lgb(self, input: np.ndarray, *args, iteration_at: int | None=None, **kwargs) -> np.ndarray:
         LOGGER.info("START")
         assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
         if iteration_at is None:
@@ -263,7 +263,7 @@ class KkGBDT:
         output = self.booster.predict(input, *args, num_iteration=iteration_at, raw_score=True, **kwargs)
         LOGGER.info("END")
         return output
-    def predict_cat(self, input: np.ndarray, *args, iteration_at: int=None, **kwargs):
+    def predict_cat(self, input: np.ndarray, *args, iteration_at: int | None=None, **kwargs) -> np.ndarray:
         LOGGER.info("START")
         assert iteration_at is None or (isinstance(iteration_at, int) and iteration_at >= 0)
         assert "prediction_type" not in kwargs, f"{kwargs}"

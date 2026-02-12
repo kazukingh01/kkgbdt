@@ -19,6 +19,7 @@ MST_OBJECTIVE = {
     "focal":       {"xgb": None,                   "lgb": "focalloss",         "cat": None},
     "multirank":   {"xgb": None,                   "lgb": "multirank",         "cat": None},
     "multismooth": {"xgb": None,                   "lgb": "multiclasssmooth",  "cat": None},
+    "multisoft":   {"xgb": None,                   "lgb": "soft_multiclass",   "cat": None},
 }
 MST_IS_PROBABILITY = {
     "binary":      True,
@@ -29,6 +30,7 @@ MST_IS_PROBABILITY = {
     "focal":       True,
     "multirank":   False,
     "multismooth": True,
+    "multisoft":   True,
 }
 MST_METRIC = {
     "binary":      {"xgb": "logloss",  "lgb": "binary_logloss", "cat": "Logloss"},
@@ -41,6 +43,7 @@ MST_METRIC = {
     "focal":       {"xgb": None,       "lgb": "focalloss",      "cat": None},
     "multirank":   {"xgb": None,       "lgb": "multirank",      "cat": None},
     "multismooth": {"xgb": None,       "lgb": "multi_logloss",  "cat": None},
+    "multisoft":   {"xgb": None,       "lgb": "soft_multiclass","cat": None},
 }
 # None: don't use encode type
 # 1: use mixed_radix_encode
@@ -53,6 +56,7 @@ MST_ENCODE_TYPE = {
     "focal":       None,
     "multirank":   1,
     "multismooth": None,
+    "multisoft":   2,
 }
 
 
